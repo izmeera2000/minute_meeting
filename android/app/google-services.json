@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "735529869051",
+    "project_id": "minute-meeting-188ae",
+    "storage_bucket": "minute-meeting-188ae.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:735529869051:android:8fa91e8e1ace8cb1755a5e",
+        "android_client_info": {
+          "package_name": "com.example.minute_meeting"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCR85pGQsRO0w-Eq9MGdVpJU1Ge_BZZ8DQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
