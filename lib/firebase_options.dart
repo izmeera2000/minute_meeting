@@ -56,7 +56,7 @@ class DefaultFirebaseOptions {
     apiKey: 'AIzaSyCR85pGQsRO0w-Eq9MGdVpJU1Ge_BZZ8DQ',
     appId: '1:735529869051:android:8fa91e8e1ace8cb1755a5e',
     messagingSenderId: '735529869051',
-    projectId: 'minute-meeting-188ae',
+    projectId: 'minute-meeting-188ae', 
     storageBucket: 'minute-meeting-188ae.firebasestorage.app',
   );
 }
