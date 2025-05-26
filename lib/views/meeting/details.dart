@@ -1,0 +1,300 @@
+import 'dart:io';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:minute_meeting/models/meetings.dart';
+import 'package:minute_meeting/models/user.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:permission_handler/permission_handler.dart';
+
+class MeetingDetailsScreen extends StatefulWidget {
+  final Meeting meeting;
+
+  const MeetingDetailsScreen({super.key, required this.meeting});
+
+  @override
+  State<MeetingDetailsScreen> createState() => _MeetingDetailsScreenState();
+}
+
+class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
+  UserModel? _currentUser;
+  final TextEditingController _attachmentController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserFromPrefs();
+  }
+
+  Future<void> _loadUserFromPrefs() async {
+    final user = await UserModel.loadFromPrefs();
+    if (user == null) return;
+
+    setState(() {
+      _currentUser = user;
+    });
+  }
+
+  String _formatDateTime(DateTime dt) {
+    return DateFormat('yyyy-MM-dd HH:mm').format(dt);
+  }
+
+  bool _isPending(Meeting meeting) {
+    if (_currentUser == null) return false;
+
+    final matchingParticipant = meeting.participants.firstWhere(
+      (p) => p.email == _currentUser!.email,
+      orElse: () =>
+          Participant(email: '', role: '', status: '', uid: '', name: ''),
+    );
+
+    return matchingParticipant.status == 'pending';
+  }
+
+  bool isHost(Meeting meeting) {
+    if (_currentUser == null) return false;
+
+    final isCreator = meeting.createdBy.any(
+      (creator) => creator.uid == _currentUser!.uid,
+    );
+
+    final isHostParticipant = meeting.participants.any(
+      (p) => p.uid == _currentUser!.uid && p.role.toLowerCase() == 'host',
+    );
+
+    return isCreator || isHostParticipant;
+  }
+
+  Future<void> _acceptInvitation(Meeting meeting) async {
+    if (_currentUser == null || meeting.id == null) {
+      return;
+    }
+
+    try {
+      final docId = meeting.id!;
+
+      final updatedParticipantsList = meeting.participants.map((p) {
+        if (p.email == _currentUser!.email) {
+          return Participant(
+            uid: p.uid,
+            email: p.email,
+            role: p.role,
+            name: p.name,
+            status: 'accepted',
+          ).toMap();
+        }
+        return p.toMap();
+      }).toList();
+
+      await FirebaseFirestore.instance
+          .collection('meetings')
+          .doc(docId)
+          .update({'participants': updatedParticipantsList});
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Invitation accepted.')),
+        );
+      }
+    } catch (e) {
+      print('Error accepting invitation: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to accept invitation: $e')),
+        );
+      }
+    }
+  }
+
+
+
+
+Future<void> _pickAndUploadAttachment(Meeting meeting) async {
+   final result = await FilePicker.platform.pickFiles(
+    type: FileType.custom,
+    allowedExtensions: ['pdf'],
+  );
+  if (result == null) return;
+
+  final path = result.files.single.path;
+  if (path == null) return;
+
+  final file = File(path);
+
+  final ref = FirebaseStorage.instance.ref('test/${DateTime.now().millisecondsSinceEpoch}.pdf');
+
+  try {
+    final task = ref.putFile(file);
+    final snapshot = await task;
+    final url = await snapshot.ref.getDownloadURL();
+    print('Uploaded file URL: $url');
+  } catch (e) {
+    print('Upload failed: $e');
+  }
+}
+
+
+
+
+
+  @override
+  Widget build(BuildContext context) {
+    final meetingId = widget.meeting.id;
+    if (meetingId == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Meeting Details')),
+        body: const Center(child: Text('Meeting ID not found')),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Meeting Details')),
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('meetings')
+            .doc(meetingId)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (!snapshot.hasData || !snapshot.data!.exists) {
+            return const Center(child: Text('Meeting not found'));
+          }
+
+          final meetingData = snapshot.data!.data()! as Map<String, dynamic>;
+          final meeting = Meeting.fromMap(meetingData);
+
+          final isPending = _isPending(meeting);
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sectionTitle('Date'),
+                Text(DateFormat('yyyy-MM-dd').format(meeting.date)),
+                const SizedBox(height: 12),
+                _sectionTitle('Scheduled Start Time'),
+                Text(
+                    '${_formatDateTime(meeting.startTime)} - ${_formatDateTime(meeting.endTime)}'),
+                const SizedBox(height: 12),
+                if (meeting.startTime2 != null && meeting.endTime2 != null) ...[
+                  _sectionTitle('Actual Start Time'),
+                  Text(
+                      '${_formatDateTime(meeting.startTime2!)} - ${_formatDateTime(meeting.endTime2!)}'),
+                  const SizedBox(height: 12),
+                ],
+                _sectionTitle('Location'),
+                Text(meeting.location),
+                const SizedBox(height: 12),
+                _sectionTitle('Created By'),
+                ...meeting.createdBy.map((c) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(c.name),
+                      subtitle: Text(c.email),
+                    )),
+                const SizedBox(height: 12),
+                _sectionTitle('Participants'),
+                ...meeting.participants.map((p) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(p.email),
+                      subtitle: Text('${p.role} • ${p.status}'),
+                    )),
+                const SizedBox(height: 12),
+                if (!isPending) ...[
+                  _sectionTitle('Attachments'),
+                  if (_currentUser != null) ...[
+                    const SizedBox(height: 12),
+                    _sectionTitle('Upload Attachment'),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _attachmentController,
+                            decoration: const InputDecoration(
+                              hintText: 'Enter attachment URL',
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.upload_file),
+                          onPressed: () => _pickAndUploadAttachment(meeting),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (meeting.attachments.isEmpty)
+                    const Text('No attachments')
+                  else
+                    ...meeting.attachments.map((a) => ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(a.url),
+                          subtitle: Text('Status: ${a.status}'),
+                        )),
+                ],
+              ],
+            ),
+          );
+        },
+      ),
+      floatingActionButton: StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('meetings')
+            .doc(meetingId)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData || !snapshot.data!.exists) {
+            return const SizedBox.shrink();
+          }
+          final meetingData = snapshot.data!.data()! as Map<String, dynamic>;
+          final meeting = Meeting.fromMap(meetingData);
+
+          final isPending = _isPending(meeting);
+
+          if (!isPending) return const SizedBox.shrink();
+
+          return FloatingActionButton.extended(
+            icon: const Icon(Icons.check),
+            label: const Text("Accept Invite"),
+            onPressed: () async {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (_) => AlertDialog(
+                  title: const Text("Accept Invitation"),
+                  content: const Text(
+                      "Do you want to accept this meeting invitation?"),
+                  actions: [
+                    TextButton(
+                      child: const Text("Cancel"),
+                      onPressed: () => Navigator.pop(context, false),
+                    ),
+                    ElevatedButton(
+                      child: const Text("Accept"),
+                      onPressed: () => Navigator.pop(context, true),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirmed == true) {
+                await _acceptInvitation(meeting);
+                setState(() {});
+              }
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Text(title,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+    );
+  }
+}

@@ -1,30 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:minute_meeting/admin.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:minute_meeting/homepage.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:minute_meeting/models/user.dart';
+import 'package:minute_meeting/views/auth/register.dart';
+
 final FirebaseAuth _auth = FirebaseAuth.instance;
 
-class AuthPage extends StatefulWidget {
-  const AuthPage({super.key});
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
 
   @override
-  State<AuthPage> createState() => _AuthPageState();
+  State<LoginPage> createState() => _LoginPageState();
 }
 
-class _AuthPageState extends State<AuthPage> {
+class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _isLogin = true;
   bool _isLoading = false;
 
-
-
-
-  
-
+  // Sign in user
   Future<void> _signInWithEmailPassword(String email, String password) async {
     try {
       UserCredential userCredential = await _auth.signInWithEmailAndPassword(
@@ -34,12 +30,30 @@ class _AuthPageState extends State<AuthPage> {
 
       final user = userCredential.user;
       if (user != null) {
-        // Save user data for profile screen
- 
-   
- print("suksses");
+        // Fetch user role from Firestore
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
 
-      
+        if (userDoc.exists) {
+          final userData = userDoc.data() as Map<String, dynamic>;
+
+          final userModel = UserModel(
+            uid: user.uid,
+            name: userData['name'] ?? '', // get name from your user data map
+            email: user.email ?? '',
+            role: userData['role'] ?? '',
+            fcmToken: userData['fcmToken'] ?? '',
+          );
+ 
+          await UserModel.saveToPrefs(userModel);
+          // Redirect based on the user's role
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => HomePage()),
+          );
+        }
       }
     } on FirebaseAuthException catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -48,64 +62,16 @@ class _AuthPageState extends State<AuthPage> {
     }
   }
 
-  Future<void> _handleAuth() async {
+  // Handle Login
+  Future<void> _handleLogin() async {
     try {
       setState(() => _isLoading = true);
-      UserCredential userCredential;
-      final auth = FirebaseAuth.instance;
 
-      if (_isLogin) {
-          print("login");
+      final email = _emailController.text.trim();
+      final password = _passwordController.text.trim();
 
-_signInWithEmailPassword( _emailController.text.trim(), _passwordController.text.trim());
-             
-             
-            //  Navigator.pushReplacement(
-            //   context,
-            //   MaterialPageRoute(builder: (context) => HomePage()),
-            // );
-
-        // if (userSnapshot.exists) {
-        //   final role = userSnapshot.child('role').value?.toString() ?? '';
-        //   if (role == 'admin') {
-        //     Navigator.pushReplacement(
-        //       context,
-        //       MaterialPageRoute(builder: (context) => HomePageAdmin()),
-        //     );
-        //   } else {
-        //     Navigator.pushReplacement(
-        //       context,
-        //       MaterialPageRoute(builder: (context) => HomePage()),
-        //     );
-        //   }
-        // } else {
-        //   throw Exception("User data not found in database.");
-        // }
-      } else {
-        userCredential = await auth.createUserWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
-        );
-
-        final uid = userCredential.user!.uid;
-        final fcmToken = await FirebaseMessaging.instance.getToken();
-
-        await FirebaseDatabase.instance.ref("users/$uid").set({
-          "email": _emailController.text.trim(),
-          "uid": uid,
-          "fcmToken": fcmToken,
-          "role": "user", // default role
-        });
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => HomePage()),
-        );
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Success!")),
-      );
+      print("Logging in...");
+      await _signInWithEmailPassword(email, password);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error: $e")),
@@ -114,7 +80,6 @@ _signInWithEmailPassword( _emailController.text.trim(), _passwordController.text
       setState(() => _isLoading = false);
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -179,6 +144,7 @@ _signInWithEmailPassword( _emailController.text.trim(), _passwordController.text
               const SizedBox(height: 20),
               TextField(
                 controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
                 decoration: const InputDecoration(
                   labelText: 'Email',
                   border: OutlineInputBorder(),
@@ -201,20 +167,17 @@ _signInWithEmailPassword( _emailController.text.trim(), _passwordController.text
                         backgroundColor: Colors.red,
                         foregroundColor: Colors.white,
                       ),
-                      onPressed: _handleAuth,
-                      child: Text(_isLogin ? 'Login' : 'Sign Up'),
+                      onPressed: _handleLogin,
+                      child: const Text('Login'),
                     ),
               TextButton(
                 onPressed: () {
-                  setState(() {
-                    _isLogin = !_isLogin;
-                  });
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (context) => RegisterPage()),
+                  );
                 },
-                child: Text(
-                  _isLogin
-                      ? "Don't have an account? Sign up"
-                      : "Already have an account? Login",
-                ),
+                child: Text("Don't have an account? Sign up"),
               ),
             ],
           ),

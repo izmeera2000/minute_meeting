@@ -15,6 +15,10 @@ import 'package:minute_meeting/manageuser.dart';
 import 'package:minute_meeting/minutemeetinglist.dart';
 import 'package:minute_meeting/profilepage.dart';
 import 'package:minute_meeting/roompage.dart';
+import 'package:minute_meeting/views/auth/login.dart';
+import 'package:minute_meeting/views/auth/register.dart';
+import 'package:minute_meeting/views/meeting/create.dart';
+import 'package:minute_meeting/views/meeting/list.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 FlutterLocalNotificationsPlugin();
@@ -60,6 +64,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primaryColor: Color(0xFFCAC5C0), // Matches theme
         scaffoldBackgroundColor: Color(0xFFECEAEA), // Background color
@@ -99,8 +104,10 @@ class MyApp extends StatelessWidget {
         ),
       ),
       routes: {
-        '/': (context) => AuthPage(),
-        '/attendance': (context) => CalendarPage(),
+        '/': (context) => LoginPage(),
+        '/register': (context) => RegisterPage(),
+        '/meeting/create': (context) => CreateMeetingPage(),
+        '/meeting/list': (context) => MeetingListPage(),
         '/minute': (context) => MinuteMeetingListPage(),
         '/calendar': (context) => DotCalendarPage(),
         '/reports': (context) => ProfilePage(),
@@ -111,7 +118,7 @@ class MyApp extends StatelessWidget {
 
       },
 
-      title: 'Calendar',
+      title: 'Minute Meeting',
     );
   }
 }

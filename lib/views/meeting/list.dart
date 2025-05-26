@@ -1,0 +1,129 @@
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:minute_meeting/models/user.dart';
+import 'package:minute_meeting/views/meeting/details.dart';
+import 'package:table_calendar/table_calendar.dart';
+import 'package:intl/intl.dart';
+
+import 'package:minute_meeting/models/meetings.dart'; // Adjust path if needed
+
+class MeetingListPage extends StatefulWidget {
+  @override
+  _MeetingListPageState createState() => _MeetingListPageState();
+}
+
+class _MeetingListPageState extends State<MeetingListPage> {
+  DateTime _focusedDay = DateTime.now();
+  DateTime? _selectedDay;
+  List<Meeting> _meetings = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDay = _focusedDay;
+    _fetchMeetingsForDay(_selectedDay!);
+  }
+
+  Future<void> _fetchMeetingsForDay(DateTime date) async {
+    try {
+      UserModel? currentUser = await UserModel.loadFromPrefs();
+      if (currentUser == null) return;
+
+      DateTime start = DateTime(date.year, date.month, date.day);
+      DateTime end = start.add(Duration(days: 1));
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('meetings')
+          .where('startTime', isGreaterThanOrEqualTo: start)
+          .where('startTime', isLessThan: end)
+          .get();
+
+      final meetings = snapshot.docs
+          .map((doc) => Meeting.fromMap(doc.data()))
+          .where((meeting) =>
+              meeting.participants.any((p) => p.email == currentUser.email))
+          .toList();
+
+      setState(() {
+        _meetings = meetings;
+      });
+    } catch (e) {
+      print('Error fetching meetings: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Meetings Calendar'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            tooltip: 'Add',
+            onPressed: () {
+              Navigator.pushNamed(context, '/meeting/create');
+            },
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          TableCalendar(
+            focusedDay: _focusedDay,
+            firstDay: DateTime.utc(2020),
+            lastDay: DateTime.utc(2030),
+            selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+            onDaySelected: (selectedDay, focusedDay) {
+              setState(() {
+                _selectedDay = selectedDay;
+                _focusedDay = focusedDay;
+              });
+              _fetchMeetingsForDay(selectedDay);
+            },
+            calendarStyle: CalendarStyle(
+              selectedDecoration:
+                  BoxDecoration(color: Colors.blue, shape: BoxShape.circle),
+              todayDecoration:
+                  BoxDecoration(color: Colors.orange, shape: BoxShape.circle),
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Meetings on ${DateFormat.yMMMMd().format(_selectedDay!)}',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          Expanded(
+            child: _meetings.isEmpty
+                ? const Center(child: Text('No meetings'))
+                : ListView.builder(
+                    itemCount: _meetings.length,
+                    itemBuilder: (context, index) {
+                      final meeting = _meetings[index];
+                      return Card(
+                        child: ListTile(
+                          title: Text(meeting.title),
+                          subtitle: Text(
+                            '${DateFormat.jm().format(meeting.startTime)} - ${DateFormat.jm().format(meeting.endTime)}\n'
+                            'Location: ${meeting.location}',
+                          ),
+                          isThreeLine: true,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    MeetingDetailsScreen(meeting: meeting),
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}

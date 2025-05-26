@@ -15,7 +15,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final List<Map<String, dynamic>> menuItems = [
-    {'title': 'Book Room Meeting', 'icon': Icons.book, 'route': '/attendance'},
+    {'title': 'Book Room Meeting', 'icon': Icons.book, 'route': '/meeting/list'},
     {'title': 'Minute Meeting', 'icon': Icons.note_alt, 'route': '/minute'},
     {'title': 'Calendar', 'icon': Icons.calendar_today, 'route': '/calendar'},
     {'title': 'Setting', 'icon': Icons.settings, 'route': '/reports'},
