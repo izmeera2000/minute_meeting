@@ -25,7 +25,7 @@ android {
     defaultConfig {
         applicationId = "com.example.minute_meeting"
         minSdk = 23 // Firebase_auth memerlukan min SDK 23
-        targetSdk = 31
+        targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
