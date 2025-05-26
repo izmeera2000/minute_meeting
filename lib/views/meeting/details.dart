@@ -8,6 +8,7 @@ import 'package:minute_meeting/models/user.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class MeetingDetailsScreen extends StatefulWidget {
   final Meeting meeting;
@@ -155,7 +156,8 @@ Future<void> _pickAndUploadAttachment(Meeting meeting) async {
 
     final newAttachment = Attachment(
       url: downloadUrl,
-      uploadedBy: _currentUser!.name,
+      uploadedBy: _currentUser!.email,
+      filename: Uri.decodeFull(downloadUrl.split('/').last.split('?').first),
       status: isHost(meeting) ? 'accepted' : 'pending',
     );
 
@@ -255,37 +257,69 @@ Future<void> _pickAndUploadAttachment(Meeting meeting) async {
                       subtitle: Text('${p.role} • ${p.status}'),
                     )),
                 const SizedBox(height: 12),
-                if (!isPending) ...[
-                  _sectionTitle('Attachments'),
-                  if (_currentUser != null) ...[
-                    const SizedBox(height: 12),
-                    _sectionTitle('Upload Attachment'),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _attachmentController,
-                            decoration: const InputDecoration(
-                              hintText: 'Enter attachment URL',
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.upload_file),
-                          onPressed: () => _pickAndUploadAttachment(meeting),
-                        ),
-                      ],
-                    ),
-                  ],
-                  if (meeting.attachments.isEmpty)
-                    const Text('No attachments')
-                  else
-                    ...meeting.attachments.map((a) => ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(a.url),
-                          subtitle: Text('Status: ${a.status}'),
-                        )),
-                ],
+if (!isPending) ...[
+  _sectionTitle('Attachments'),
+  if (_currentUser != null) ...[
+    const SizedBox(height: 12),
+    _sectionTitle('Upload Attachment'),
+    Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: _attachmentController,
+            decoration: const InputDecoration(
+              hintText: 'Enter attachment URL',
+            ),
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.upload_file),
+          onPressed: () => _pickAndUploadAttachment(meeting),
+        ),
+      ],
+    ),
+  ],
+  if (meeting.attachments.isEmpty)
+    const Text('No attachments')
+  else
+    ...meeting.attachments.map((a) => ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: const Icon(Icons.insert_drive_file),
+      title: Text(
+        _getFileName(a.url),
+        style: const TextStyle(decoration: TextDecoration.underline, color: Colors.blue),
+      ),
+      subtitle: Text('Status: ${a.status}'),
+      onTap: () {
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text(_getFileName(a.url)),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: a.url.endsWith('.pdf') 
+                ? const Text('Preview not available for PDF. Click Open to view in browser.') 
+                : Image.network(a.url, errorBuilder: (_, __, ___) => const Text('Failed to load preview')),
+            ),
+            actions: [
+              TextButton(
+                child: const Text('Open'),
+                onPressed: () {
+                  Navigator.pop(context);
+                  _launchURL(a.url);
+                },
+              ),
+              TextButton(
+                child: const Text('Close'),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+        );
+      },
+    )),
+]
+
               ],
             ),
           );
@@ -347,5 +381,17 @@ Future<void> _pickAndUploadAttachment(Meeting meeting) async {
       child: Text(title,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
     );
+  }
+}
+String _getFileName(String url) {
+  return Uri.decodeFull(url.split('/').last.split('?').first);
+}
+
+void _launchURL(String url) async {
+  final uri = Uri.parse(url);
+  if (await canLaunchUrl(uri)) {
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  } else {
+    // Handle error
   }
 }

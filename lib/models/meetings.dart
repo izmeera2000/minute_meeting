@@ -66,11 +66,13 @@ class Participant {
 class Attachment {
   String url;
   String status;
-  String uploadedBy; // New field
+  String uploadedBy;
+  String filename; // New field
 
   Attachment({
     required this.url,
     required this.uploadedBy,
+    required this.filename,
     this.status = "pending",
   });
 
@@ -79,6 +81,7 @@ class Attachment {
       'url': url,
       'status': status,
       'uploadedBy': uploadedBy,
+      'filename': filename,
     };
   }
 
@@ -86,7 +89,8 @@ class Attachment {
     return Attachment(
       url: map['url'],
       status: map['status'] ?? "pending",
-      uploadedBy: map['uploadedBy'] ?? "Unknown", // Fallback
+      uploadedBy: map['uploadedBy'] ?? "Unknown",
+      filename: map['filename'] ?? Uri.decodeFull(map['url']?.split('/').last?.split('?').first ?? 'unknown_file'),
     );
   }
 }
