@@ -112,26 +112,77 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
 
 
 Future<void> _pickAndUploadAttachment(Meeting meeting) async {
-   final result = await FilePicker.platform.pickFiles(
-    type: FileType.custom,
-    allowedExtensions: ['pdf'],
-  );
-  if (result == null) return;
+  if (_currentUser == null) return;
 
-  final path = result.files.single.path;
-  if (path == null) return;
-
-  final file = File(path);
-
-  final ref = FirebaseStorage.instance.ref('test/${DateTime.now().millisecondsSinceEpoch}.pdf');
+ 
 
   try {
-    final task = ref.putFile(file);
-    final snapshot = await task;
-    final url = await snapshot.ref.getDownloadURL();
-    print('Uploaded file URL: $url');
+    // 1. Pick file
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+     type: FileType.custom,
+  allowedExtensions: ['pdf', 'doc', 'jpg', 'png'],
+      allowMultiple: false,
+    );
+
+    if (result == null) return;
+
+    final pickedFile = result.files.single;
+    print("Picked: ${pickedFile.name}");
+    print("File path: ${pickedFile.path}");
+
+    if (pickedFile.path == null) {
+      throw Exception('Picked file path is null.');
+    }
+
+    final file = File(pickedFile.path!);
+
+    final storageRef = FirebaseStorage.instance
+        .ref()
+        .child('attachments/${meeting.id}/${DateTime.now().millisecondsSinceEpoch}_${pickedFile.name}');
+
+    // 🔥 Use putFile now that we have permission
+    final uploadTask = storageRef.putFile(file);
+
+    uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
+  print('Task state: ${snapshot.state}, bytes transferred: ${snapshot.bytesTransferred}/${snapshot.totalBytes}');
+}, onError: (e) {
+  print('Upload error during snapshot: $e');
+});
+    final snapshot = await uploadTask;
+
+    final downloadUrl = await snapshot.ref.getDownloadURL();
+    print("Uploaded file URL: $downloadUrl");
+
+    final newAttachment = Attachment(
+      url: downloadUrl,
+      uploadedBy: _currentUser!.name,
+      status: isHost(meeting) ? 'accepted' : 'pending',
+    );
+
+    final docId = meeting.id!;
+    final updatedAttachments = [...meeting.attachments, newAttachment]
+        .map((a) => a.toMap())
+        .toList();
+
+    await FirebaseFirestore.instance
+        .collection('meetings')
+        .doc(docId)
+        .update({'attachments': updatedAttachments});
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Attachment uploaded: ${newAttachment.status}'),
+        ),
+      );
+    }
   } catch (e) {
-    print('Upload failed: $e');
+    print('Upload error: $e');
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Upload failed: $e')),
+      );
+    }
   }
 }
 
