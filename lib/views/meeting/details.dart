@@ -299,7 +299,7 @@ if (!isPending) ...[
               width: double.maxFinite,
               child: a.url.endsWith('.pdf') 
                 ? const Text('Preview not available for PDF. Click Open to view in browser.') 
-                : Image.network(a.url, errorBuilder: (_, __, ___) => const Text('Failed to load preview')),
+                : const Text('Preview not available for PDF. Click Open to view in browser.') ,
             ),
             actions: [
               TextButton(
@@ -384,14 +384,29 @@ if (!isPending) ...[
   }
 }
 String _getFileName(String url) {
-  return Uri.decodeFull(url.split('/').last.split('?').first);
+  try {
+    final segments = Uri.parse(url).pathSegments;
+    final lastSegment = segments.isNotEmpty ? segments.last : 'unknown_file';
+    return Uri.decodeFull(lastSegment.split('?').first);
+  } catch (e) {
+    return 'unknown_file';
+  }
 }
 
 void _launchURL(String url) async {
   final uri = Uri.parse(url);
-  if (await canLaunchUrl(uri)) {
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
-  } else {
-    // Handle error
+  try {
+    final canLaunch = await canLaunchUrl(uri);
+    debugPrint('canLaunch: $canLaunch');
+    if (!canLaunch) {
+      throw 'Cannot launch';
+    }
+
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched) {
+      debugPrint('Launch failed');
+    }
+  } catch (e) {
+    debugPrint('Error launching URL: $e');
   }
 }
