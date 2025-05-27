@@ -9,6 +9,7 @@ import 'package:minute_meeting/models/user.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:minute_meeting/views/meeting/noted.dart';
+import 'package:minute_meeting/views/meeting/notes.dart';
 import 'package:minute_meeting/views/meeting/pdf.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -297,7 +298,7 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => MeetingNotesScreen(meeting: widget.meeting),
+                  builder: (_) => MeetingNotesKanbanPage(meetingId: meetingId),
                 ),
               );
             },

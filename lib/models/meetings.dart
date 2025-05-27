@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:kanban_board/kanban_board.dart';
 
 class Creator {
   final String uid;
@@ -28,16 +29,19 @@ class Creator {
   }
 }
 
-class Note {
-  String id;
-  String content;
-  String status; // e.g. 'todo', 'in-progress', 'done'
+class Note extends KanbanBoardGroupItem {
+  final String id;
+  final String content;
+  String status; // 'todo', 'in-progress', 'done'
 
   Note({
     required this.id,
     required this.content,
     required this.status,
   });
+
+  @override
+  String get itemId => id;
 
   Map<String, dynamic> toMap() {
     return {
@@ -55,6 +59,7 @@ class Note {
     );
   }
 }
+
 
 class Participant {
   String uid;
