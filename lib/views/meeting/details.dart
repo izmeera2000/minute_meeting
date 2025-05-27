@@ -422,7 +422,7 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                                     },
                                   ),
                                   if (isHost(meeting) &&
-                                      a.status != 'accepted') ...[
+                                      a.status != 'approved') ...[
                                     TextButton(
                                       child: const Text('Approve'),
                                       onPressed: () async {
