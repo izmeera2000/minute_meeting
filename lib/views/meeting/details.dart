@@ -3,10 +3,12 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:minute_meeting/helper/downloadpdf.dart';
 import 'package:minute_meeting/models/meetings.dart';
 import 'package:minute_meeting/models/user.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:minute_meeting/views/meeting/test.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -109,88 +111,79 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
     }
   }
 
+  Future<void> _pickAndUploadAttachment(Meeting meeting) async {
+    if (_currentUser == null) return;
 
-
-
-Future<void> _pickAndUploadAttachment(Meeting meeting) async {
-  if (_currentUser == null) return;
-
- 
-
-  try {
-    // 1. Pick file
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-     type: FileType.custom,
-  allowedExtensions: ['pdf', 'doc', 'jpg', 'png'],
-      allowMultiple: false,
-    );
-
-    if (result == null) return;
-
-    final pickedFile = result.files.single;
-    print("Picked: ${pickedFile.name}");
-    print("File path: ${pickedFile.path}");
-
-    if (pickedFile.path == null) {
-      throw Exception('Picked file path is null.');
-    }
-
-    final file = File(pickedFile.path!);
-
-    final storageRef = FirebaseStorage.instance
-        .ref()
-        .child('attachments/${meeting.id}/${DateTime.now().millisecondsSinceEpoch}_${pickedFile.name}');
-
-    // 🔥 Use putFile now that we have permission
-    final uploadTask = storageRef.putFile(file);
-
-    uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-  print('Task state: ${snapshot.state}, bytes transferred: ${snapshot.bytesTransferred}/${snapshot.totalBytes}');
-}, onError: (e) {
-  print('Upload error during snapshot: $e');
-});
-    final snapshot = await uploadTask;
-
-    final downloadUrl = await snapshot.ref.getDownloadURL();
-    print("Uploaded file URL: $downloadUrl");
-
-    final newAttachment = Attachment(
-      url: downloadUrl,
-      uploadedBy: _currentUser!.email,
-      filename: Uri.decodeFull(downloadUrl.split('/').last.split('?').first),
-      status: isHost(meeting) ? 'accepted' : 'pending',
-    );
-
-    final docId = meeting.id!;
-    final updatedAttachments = [...meeting.attachments, newAttachment]
-        .map((a) => a.toMap())
-        .toList();
-
-    await FirebaseFirestore.instance
-        .collection('meetings')
-        .doc(docId)
-        .update({'attachments': updatedAttachments});
-
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Attachment uploaded: ${newAttachment.status}'),
-        ),
+    try {
+      // 1. Pick file
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'doc', 'jpg', 'png'],
+        allowMultiple: false,
       );
-    }
-  } catch (e) {
-    print('Upload error: $e');
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Upload failed: $e')),
+
+      if (result == null) return;
+
+      final pickedFile = result.files.single;
+      print("Picked: ${pickedFile.name}");
+      print("File path: ${pickedFile.path}");
+
+      if (pickedFile.path == null) {
+        throw Exception('Picked file path is null.');
+      }
+
+      final file = File(pickedFile.path!);
+
+      final storageRef = FirebaseStorage.instance.ref().child(
+          'attachments/${meeting.id}/${DateTime.now().millisecondsSinceEpoch}_${pickedFile.name}');
+
+      // 🔥 Use putFile now that we have permission
+      final uploadTask = storageRef.putFile(file);
+
+      uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
+        print(
+            'Task state: ${snapshot.state}, bytes transferred: ${snapshot.bytesTransferred}/${snapshot.totalBytes}');
+      }, onError: (e) {
+        print('Upload error during snapshot: $e');
+      });
+      final snapshot = await uploadTask;
+
+      final downloadUrl = await snapshot.ref.getDownloadURL();
+      print("Uploaded file URL: $downloadUrl");
+
+      final newAttachment = Attachment(
+        url: downloadUrl,
+        uploadedBy: _currentUser!.email,
+        filename: Uri.decodeFull(downloadUrl.split('/').last.split('?').first),
+        status: isHost(meeting) ? 'accepted' : 'pending',
       );
+
+      final docId = meeting.id!;
+      final updatedAttachments = [...meeting.attachments, newAttachment]
+          .map((a) => a.toMap())
+          .toList();
+
+      await FirebaseFirestore.instance
+          .collection('meetings')
+          .doc(docId)
+          .update({'attachments': updatedAttachments});
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Attachment uploaded: ${newAttachment.status}'),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Upload error: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload failed: $e')),
+        );
+      }
     }
   }
-}
-
-
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -257,69 +250,74 @@ Future<void> _pickAndUploadAttachment(Meeting meeting) async {
                       subtitle: Text('${p.role} • ${p.status}'),
                     )),
                 const SizedBox(height: 12),
-if (!isPending) ...[
-  _sectionTitle('Attachments'),
-  if (_currentUser != null) ...[
-    const SizedBox(height: 12),
-    _sectionTitle('Upload Attachment'),
-    Row(
-      children: [
-        Expanded(
-          child: TextField(
-            controller: _attachmentController,
-            decoration: const InputDecoration(
-              hintText: 'Enter attachment URL',
-            ),
-          ),
-        ),
-        IconButton(
-          icon: const Icon(Icons.upload_file),
-          onPressed: () => _pickAndUploadAttachment(meeting),
-        ),
-      ],
-    ),
-  ],
-  if (meeting.attachments.isEmpty)
-    const Text('No attachments')
-  else
-    ...meeting.attachments.map((a) => ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: const Icon(Icons.insert_drive_file),
-      title: Text(
-        _getFileName(a.url),
-        style: const TextStyle(decoration: TextDecoration.underline, color: Colors.blue),
-      ),
-      subtitle: Text('Status: ${a.status}'),
-      onTap: () {
-        showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: Text(_getFileName(a.url)),
-            content: SizedBox(
-              width: double.maxFinite,
-              child: a.url.endsWith('.pdf') 
-                ? const Text('Preview not available for PDF. Click Open to view in browser.') 
-                : const Text('Preview not available for PDF. Click Open to view in browser.') ,
-            ),
-            actions: [
-              TextButton(
-                child: const Text('Open'),
-                onPressed: () {
-                  Navigator.pop(context);
-                  _launchURL(a.url);
-                },
-              ),
-              TextButton(
-                child: const Text('Close'),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ],
-          ),
-        );
-      },
-    )),
-]
-
+                if (!isPending) ...[
+                  _sectionTitle('Attachments'),
+                  if (_currentUser != null) ...[
+                    const SizedBox(height: 12),
+                    _sectionTitle('Upload Attachment'),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _attachmentController,
+                            decoration: const InputDecoration(
+                              hintText: 'Enter attachment URL',
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.upload_file),
+                          onPressed: () => _pickAndUploadAttachment(meeting),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (meeting.attachments.isEmpty)
+                    const Text('No attachments')
+                  else
+                    ...meeting.attachments.map((a) => ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.insert_drive_file),
+                          title: Text(
+                            _getFileName(a.url),
+                            style: const TextStyle(
+                                decoration: TextDecoration.underline,
+                                color: Colors.blue),
+                          ),
+                          subtitle: Text('Status: ${a.status}'),
+                          onTap: () {
+                            showDialog(
+                              context: context,
+                              builder: (_) => AlertDialog(
+                                title: Text(_getFileName(a.url)),
+                                content: SizedBox(
+                                  width: double.maxFinite,
+                                  child: a.url.endsWith('.pdf')
+                                      ? const Text(
+                                          'Preview not available for PDF. Click Open to view in browser.')
+                                      : Image.network(a.url,
+                                          errorBuilder: (_, __, ___) =>
+                                              const Text(
+                                                  'Failed to load preview')),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    child: const Text('Open'),
+                                    onPressed: () {
+                                      Navigator.pop(context);
+                                      _launchURL(context, a.url);
+                                    },
+                                  ),
+                                  TextButton(
+                                    child: const Text('Close'),
+                                    onPressed: () => Navigator.pop(context),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        )),
+                ]
               ],
             ),
           );
@@ -383,6 +381,7 @@ if (!isPending) ...[
     );
   }
 }
+
 String _getFileName(String url) {
   try {
     final segments = Uri.parse(url).pathSegments;
@@ -393,20 +392,36 @@ String _getFileName(String url) {
   }
 }
 
-void _launchURL(String url) async {
-  final uri = Uri.parse(url);
-  try {
-    final canLaunch = await canLaunchUrl(uri);
-    debugPrint('canLaunch: $canLaunch');
-    if (!canLaunch) {
-      throw 'Cannot launch';
-    }
+void _launchURL(BuildContext context, String url) async {
+  final fileName = _getFileName(url);
 
-    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!launched) {
-      debugPrint('Launch failed');
+  if (fileName.toLowerCase().endsWith('.pdf')) {
+    // It's a PDF – download and view it
+    try {
+      final filePath = await downloadPdf(url, fileName);
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => PdfViewPage(filePath: filePath)),
+      );
+    } catch (e) {
+      debugPrint('Error opening PDF: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load PDF: $e')),
+      );
     }
-  } catch (e) {
-    debugPrint('Error launching URL: $e');
+  } else {
+    // Not a PDF – launch in external browser
+    final uri = Uri.parse(url);
+    try {
+      final canLaunch = await canLaunchUrl(uri);
+      debugPrint('canLaunch: $canLaunch');
+      if (!canLaunch) throw 'Cannot launch';
+
+      final launched =
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched) debugPrint('Launch failed');
+    } catch (e) {
+      debugPrint('Error launching URL: $e');
+    }
   }
 }

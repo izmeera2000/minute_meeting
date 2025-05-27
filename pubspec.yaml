@@ -55,6 +55,8 @@ dependencies:
   firebase_database: ^10.5.7
   file_picker: ^8.0.7
   url_launcher: ^6.3.1
+  flutter_inappwebview: ^6.0.0
+  flutter_pdfview: ^1.4.0+1
 
 dev_dependencies:
   flutter_test:
