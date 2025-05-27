@@ -175,44 +175,52 @@ class Meeting {
     };
   }
 
-  factory Meeting.fromMap(Map<String, dynamic> map) {
-    // Parse participants from a List<dynamic>
-    final participantsList =
-        (map['participants'] as List<dynamic>? ?? []).map((e) {
-      final participantMap = e as Map<String, dynamic>;
-      final uid = participantMap['uid'] as String? ?? '';
-      return Participant.fromMap(uid, participantMap);
-    }).toList();
+factory Meeting.fromMap(Map<String, dynamic> map) {
+  // Safely parse participants
+  final participantsList = (map['participants'] is List)
+      ? (map['participants'] as List<dynamic>).map((e) {
+          final participantMap = e as Map<String, dynamic>;
+          final uid = participantMap['uid'] as String? ?? '';
+          return Participant.fromMap(uid, participantMap);
+        }).toList()
+      : <Participant>[]; // fallback to empty list if malformed
 
-    final attachmentsList = (map['attachments'] as List<dynamic>? ?? [])
-        .map((e) => Attachment.fromMap(e as Map<String, dynamic>))
-        .toList();
+  final attachmentsList = (map['attachments'] is List)
+      ? (map['attachments'] as List<dynamic>)
+          .map((e) => Attachment.fromMap(e as Map<String, dynamic>))
+          .toList()
+      : <Attachment>[];
 
-    final creatorList = (map['created_by'] as List<dynamic>? ?? [])
-        .map((e) => Creator.fromMap(e as Map<String, dynamic>))
-        .toList();
+  final creatorList = (map['created_by'] is List)
+      ? (map['created_by'] as List<dynamic>)
+          .map((e) => Creator.fromMap(e as Map<String, dynamic>))
+          .toList()
+      : <Creator>[];
 
-    return Meeting(
-      id: map['id'] as String?,
-      title: map['title'] ?? '',
-      startTime: (map['startTime'] as Timestamp).toDate(),
-      endTime: (map['endTime'] as Timestamp).toDate(),
-      startTime2: map['startTime2'] != null
-          ? (map['startTime2'] as Timestamp).toDate()
-          : null,
-      endTime2: map['endTime2'] != null
-          ? (map['endTime2'] as Timestamp).toDate()
-          : null,
-      notes: map['notes'] != null
-          ? (map['notes'] as List<dynamic>)
-              .map((noteMap) => Note.fromMap(noteMap))
-              .toList()
-          : null,
-      date: (map['date'] as Timestamp).toDate(),
-      createdBy: creatorList,
-      participants: participantsList,
-      attachments: attachmentsList,
-      location: map['location'] ?? '',
-    );
-  }
+  final notesList = (map['notes'] is List)
+      ? (map['notes'] as List<dynamic>)
+          .map((noteMap) => Note.fromMap(noteMap))
+          .toList()
+      : null;
+
+  return Meeting(
+    id: map['id'] as String?,
+    title: map['title'] ?? '',
+    startTime: (map['startTime'] as Timestamp).toDate(),
+    endTime: (map['endTime'] as Timestamp).toDate(),
+    startTime2: map['startTime2'] != null
+        ? (map['startTime2'] as Timestamp).toDate()
+        : null,
+    endTime2: map['endTime2'] != null
+        ? (map['endTime2'] as Timestamp).toDate()
+        : null,
+    notes: notesList,
+    date: (map['date'] as Timestamp).toDate(),
+    createdBy: creatorList,
+    participants: participantsList,
+    attachments: attachmentsList,
+    location: map['location'] ?? '',
+  );
+}
+
 }

@@ -189,11 +189,17 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
   List<Attachment> _filteredAttachments(Meeting meeting) {
     final isHost =
         meeting.createdBy.any((creator) => creator.uid == _currentUser?.uid);
+    print(meeting.createdBy);
+    print('Meeting createdBy uids: ${meeting.createdBy.map((c) => c.uid)}');
+    print('Current user uid: ${_currentUser?.uid}');
+    for (final a in meeting.attachments) {
+      print('Attachment: ${a.filename}, status: ${a.status}');
+    }
 
     if (isHost) {
       return meeting.attachments;
     } else {
-      return meeting.attachments.where((a) => a.status == 'accepted').toList();
+      return meeting.attachments.where((a) => a.status == 'approved').toList();
     }
   }
 
@@ -394,13 +400,18 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                                 title: Text(_getFileName(a.url)),
                                 content: SizedBox(
                                   width: double.maxFinite,
-                                  child: a.url.endsWith('.pdf')
+                                  child: a.url.toLowerCase().endsWith('.pdf')
                                       ? const Text(
-                                          'Preview not available for PDF. Click Open to view in browser.')
-                                      : Image.network(a.url,
-                                          errorBuilder: (_, __, ___) =>
+                                          'Preview not available for PDF. Click Open to view in browser.',
+                                        )
+                                      : Image.network(
+                                          a.url,
+                                          fit: BoxFit.contain,
+                                          errorBuilder: (context, error,
+                                                  stackTrace) =>
                                               const Text(
-                                                  'Failed to load preview')),
+                                                  'Failed to load image preview'),
+                                        ),
                                 ),
                                 actions: [
                                   TextButton(
@@ -544,5 +555,3 @@ void _launchURL(BuildContext context, String url) async {
     }
   }
 }
-
-
