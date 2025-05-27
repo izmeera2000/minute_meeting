@@ -8,7 +8,7 @@ import 'package:minute_meeting/models/meetings.dart';
 import 'package:minute_meeting/models/user.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:minute_meeting/views/meeting/test.dart';
+import 'package:minute_meeting/views/meeting/pdf.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -185,6 +185,91 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
     }
   }
 
+  List<Attachment> _filteredAttachments(Meeting meeting) {
+    final isHost =
+        meeting.createdBy.any((creator) => creator.uid == _currentUser?.uid);
+
+    if (isHost) {
+      return meeting.attachments;
+    } else {
+      return meeting.attachments.where((a) => a.status == 'accepted').toList();
+    }
+  }
+
+  Future<void> _approveAttachment(
+      Meeting meeting, Attachment attachment) async {
+    if (meeting.id == null) return;
+
+    try {
+      final docId = meeting.id!;
+      final updatedAttachments = meeting.attachments.map((a) {
+        if (a.url == attachment.url) {
+          return Attachment(
+            url: a.url,
+            uploadedBy: a.uploadedBy,
+            filename: a.filename,
+            status: 'accepted', // approve here
+          ).toMap();
+        }
+        return a.toMap();
+      }).toList();
+
+      await FirebaseFirestore.instance
+          .collection('meetings')
+          .doc(docId)
+          .update({'attachments': updatedAttachments});
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Attachment approved')),
+        );
+      }
+    } catch (e) {
+      print('Error approving attachment: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to approve attachment: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _rejectAttachment(Meeting meeting, Attachment attachment) async {
+  if (meeting.id == null) return;
+
+  try {
+    // 1. Delete file from Firebase Storage
+    final ref = FirebaseStorage.instance.refFromURL(attachment.url);
+    await ref.delete();
+
+    // 2. Remove attachment from list in Firestore
+    final docId = meeting.id!;
+    final updatedAttachments = meeting.attachments
+        .where((a) => a.url != attachment.url) // remove rejected file
+        .map((a) => a.toMap())
+        .toList();
+
+    await FirebaseFirestore.instance
+        .collection('meetings')
+        .doc(docId)
+        .update({'attachments': updatedAttachments});
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Attachment rejected and deleted')),
+      );
+    }
+  } catch (e) {
+    print('Error rejecting attachment: $e');
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to reject attachment: $e')),
+      );
+    }
+  }
+}
+
+
   @override
   Widget build(BuildContext context) {
     final meetingId = widget.meeting.id;
@@ -214,6 +299,7 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
           final meeting = Meeting.fromMap(meetingData);
 
           final isPending = _isPending(meeting);
+          final filteredAttachments = _filteredAttachments(meeting);
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -257,14 +343,14 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                     _sectionTitle('Upload Attachment'),
                     Row(
                       children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _attachmentController,
-                            decoration: const InputDecoration(
-                              hintText: 'Enter attachment URL',
-                            ),
-                          ),
-                        ),
+                        // Expanded(
+                        //   child: TextField(
+                        //     controller: _attachmentController,
+                        //     decoration: const InputDecoration(
+                        //       hintText: 'Enter attachment URL',
+                        //     ),
+                        //   ),
+                        // ),
                         IconButton(
                           icon: const Icon(Icons.upload_file),
                           onPressed: () => _pickAndUploadAttachment(meeting),
@@ -272,10 +358,10 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                       ],
                     ),
                   ],
-                  if (meeting.attachments.isEmpty)
+                  if (filteredAttachments.isEmpty)
                     const Text('No attachments')
                   else
-                    ...meeting.attachments.map((a) => ListTile(
+                    ...filteredAttachments.map((a) => ListTile(
                           contentPadding: EdgeInsets.zero,
                           leading: const Icon(Icons.insert_drive_file),
                           title: Text(
@@ -308,6 +394,23 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                                       _launchURL(context, a.url);
                                     },
                                   ),
+                                  if (isHost(meeting) &&
+                                      a.status != 'accepted') ...[
+                                    TextButton(
+                                      child: const Text('Approve'),
+                                      onPressed: () async {
+                                        Navigator.pop(context);
+                                        await _approveAttachment(meeting, a);
+                                      },
+                                    ),
+                                    TextButton(
+                                      child: const Text('Reject'),
+                                      onPressed: () async {
+                                        Navigator.pop(context);
+                                        await _rejectAttachment(meeting, a);
+                                      },
+                                    ),
+                                  ],
                                   TextButton(
                                     child: const Text('Close'),
                                     onPressed: () => Navigator.pop(context),
