@@ -8,6 +8,7 @@ import 'package:minute_meeting/models/meetings.dart';
 import 'package:minute_meeting/models/user.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:minute_meeting/views/meeting/noted.dart';
 import 'package:minute_meeting/views/meeting/pdf.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -235,40 +236,39 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
   }
 
   Future<void> _rejectAttachment(Meeting meeting, Attachment attachment) async {
-  if (meeting.id == null) return;
+    if (meeting.id == null) return;
 
-  try {
-    // 1. Delete file from Firebase Storage
-    final ref = FirebaseStorage.instance.refFromURL(attachment.url);
-    await ref.delete();
+    try {
+      // 1. Delete file from Firebase Storage
+      final ref = FirebaseStorage.instance.refFromURL(attachment.url);
+      await ref.delete();
 
-    // 2. Remove attachment from list in Firestore
-    final docId = meeting.id!;
-    final updatedAttachments = meeting.attachments
-        .where((a) => a.url != attachment.url) // remove rejected file
-        .map((a) => a.toMap())
-        .toList();
+      // 2. Remove attachment from list in Firestore
+      final docId = meeting.id!;
+      final updatedAttachments = meeting.attachments
+          .where((a) => a.url != attachment.url) // remove rejected file
+          .map((a) => a.toMap())
+          .toList();
 
-    await FirebaseFirestore.instance
-        .collection('meetings')
-        .doc(docId)
-        .update({'attachments': updatedAttachments});
+      await FirebaseFirestore.instance
+          .collection('meetings')
+          .doc(docId)
+          .update({'attachments': updatedAttachments});
 
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Attachment rejected and deleted')),
-      );
-    }
-  } catch (e) {
-    print('Error rejecting attachment: $e');
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to reject attachment: $e')),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Attachment rejected and deleted')),
+        );
+      }
+    } catch (e) {
+      print('Error rejecting attachment: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to reject attachment: $e')),
+        );
+      }
     }
   }
-}
-
 
   @override
   Widget build(BuildContext context) {
@@ -281,7 +281,23 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Meeting Details')),
+      appBar: AppBar(
+        title: const Text('Meeting Details'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.note_alt_outlined),
+            tooltip: 'View Notes',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => MeetingNotesScreen(meeting: widget.meeting),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
             .collection('meetings')
@@ -528,3 +544,5 @@ void _launchURL(BuildContext context, String url) async {
     }
   }
 }
+
+

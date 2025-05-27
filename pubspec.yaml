@@ -57,6 +57,7 @@ dependencies:
   url_launcher: ^6.3.1
   flutter_inappwebview: ^6.0.0
   flutter_pdfview: ^1.4.0+1
+  kanban_board: ^1.0.0+2
 
 dev_dependencies:
   flutter_test:

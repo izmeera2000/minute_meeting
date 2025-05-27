@@ -28,6 +28,34 @@ class Creator {
   }
 }
 
+class Note {
+  String id;
+  String content;
+  String status; // e.g. 'todo', 'in-progress', 'done'
+
+  Note({
+    required this.id,
+    required this.content,
+    required this.status,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'content': content,
+      'status': status,
+    };
+  }
+
+  factory Note.fromMap(Map<String, dynamic> map) {
+    return Note(
+      id: map['id'],
+      content: map['content'],
+      status: map['status'],
+    );
+  }
+}
+
 class Participant {
   String uid;
   String email;
@@ -45,9 +73,9 @@ class Participant {
 
   Map<String, dynamic> toMap() {
     return {
-      'uid': uid,       // Include uid here
+      'uid': uid, // Include uid here
       'email': email,
-      'name': name,     // Include name here
+      'name': name, // Include name here
       'role': role,
       'status': status,
     };
@@ -63,6 +91,7 @@ class Participant {
     );
   }
 }
+
 class Attachment {
   String url;
   String status;
@@ -90,14 +119,15 @@ class Attachment {
       url: map['url'],
       status: map['status'] ?? "pending",
       uploadedBy: map['uploadedBy'] ?? "Unknown",
-      filename: map['filename'] ?? Uri.decodeFull(map['url']?.split('/').last?.split('?').first ?? 'unknown_file'),
+      filename: map['filename'] ??
+          Uri.decodeFull(
+              map['url']?.split('/').last?.split('?').first ?? 'unknown_file'),
     );
   }
 }
 
-
 class Meeting {
-  final String? id; 
+  final String? id;
   final String title;
   final DateTime startTime;
   final DateTime endTime;
@@ -105,6 +135,7 @@ class Meeting {
   final DateTime? endTime2;
   final List<Creator> createdBy;
   final DateTime date;
+  List<Note>? notes;
   final List<Participant> participants;
   final List<Attachment> attachments;
   final String location;
@@ -115,6 +146,8 @@ class Meeting {
     required this.startTime,
     required this.endTime,
     this.startTime2,
+    this.notes, // optional
+
     this.endTime2,
     required this.createdBy,
     required this.date,
@@ -132,6 +165,7 @@ class Meeting {
       'endTime2': endTime2 != null ? Timestamp.fromDate(endTime2!) : null,
       'date': Timestamp.fromDate(date),
       'created_by': createdBy.map((c) => c.toMap()).toList(),
+      if (notes != null) 'notes': notes!.map((n) => n.toMap()).toList(),
 
       // Store participants as a List of Maps (each with uid inside)
       'participants': participants.map((p) => p.toMap()).toList(),
@@ -143,13 +177,12 @@ class Meeting {
 
   factory Meeting.fromMap(Map<String, dynamic> map) {
     // Parse participants from a List<dynamic>
-    final participantsList = (map['participants'] as List<dynamic>? ?? [])
-        .map((e) {
-          final participantMap = e as Map<String, dynamic>;
-          final uid = participantMap['uid'] as String? ?? '';
-          return Participant.fromMap(uid, participantMap);
-        })
-        .toList();
+    final participantsList =
+        (map['participants'] as List<dynamic>? ?? []).map((e) {
+      final participantMap = e as Map<String, dynamic>;
+      final uid = participantMap['uid'] as String? ?? '';
+      return Participant.fromMap(uid, participantMap);
+    }).toList();
 
     final attachmentsList = (map['attachments'] as List<dynamic>? ?? [])
         .map((e) => Attachment.fromMap(e as Map<String, dynamic>))
@@ -170,6 +203,11 @@ class Meeting {
       endTime2: map['endTime2'] != null
           ? (map['endTime2'] as Timestamp).toDate()
           : null,
+      notes: map['notes'] != null
+          ? (map['notes'] as List<dynamic>)
+              .map((noteMap) => Note.fromMap(noteMap))
+              .toList()
+          : null,
       date: (map['date'] as Timestamp).toDate(),
       createdBy: creatorList,
       participants: participantsList,
@@ -178,5 +216,3 @@ class Meeting {
     );
   }
 }
-
-
