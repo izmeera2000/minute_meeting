@@ -156,7 +156,7 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
         url: downloadUrl,
         uploadedBy: _currentUser!.email,
         filename: Uri.decodeFull(downloadUrl.split('/').last.split('?').first),
-        status: isHost(meeting) ? 'accepted' : 'pending',
+        status: isHost(meeting) ? 'approved' : 'pending',
       );
 
       final docId = meeting.id!;
