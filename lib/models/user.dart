@@ -1,29 +1,38 @@
 import 'dart:convert';
+import 'package:minute_meeting/models/seed.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class UserModel {
   final String uid;
   final String email;
-  final String name;    // Added name
+  final String name;
   final String role;
   final String fcmToken;
+  List<Seed>? seeds; // seeds is now optional
 
   UserModel({
     required this.uid,
     required this.email,
-    required this.name,  // Added name here
+    required this.name,
     required this.role,
     required this.fcmToken,
+    this.seeds, // optional
   });
 
-  // Create UserModel from a Map (e.g. from Firestore)
+  // Create UserModel from a Map (e.g., from Firestore)
   factory UserModel.fromMap(Map<String, dynamic> map) {
     return UserModel(
       uid: map['uid'] ?? '',
       email: map['email'] ?? '',
-      name: map['name'] ?? '',        // Added here
+      name: map['name'] ?? '',
       role: map['role'] ?? '',
       fcmToken: map['fcmToken'] ?? '',
+      seeds: (map['seeds'] as List<dynamic>?)
+          ?.map((seedMap) => Seed.fromMap(
+                (seedMap as Map<String, dynamic>)['seedId'] ?? '',
+                seedMap,
+              ))
+          .toList(),
     );
   }
 
@@ -32,9 +41,10 @@ class UserModel {
     return {
       'uid': uid,
       'email': email,
-      'name': name,                  // Added here
+      'name': name,
       'role': role,
       'fcmToken': fcmToken,
+      'seeds': seeds?.map((seed) => seed.toMap()).toList(), // handle null
     };
   }
 
@@ -63,5 +73,13 @@ class UserModel {
   static Future<void> clearPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('cachedUser');
+  }
+
+  // Add a seed to the user's seeds list (if not already there)
+  void addSeed(Seed seed) {
+    seeds ??= [];
+    if (!seeds!.any((existingSeed) => existingSeed.seedId == seed.seedId)) {
+      seeds!.add(seed);
+    }
   }
 }

@@ -15,10 +15,14 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final List<Map<String, dynamic>> menuItems = [
-    {'title': 'Book Room Meeting', 'icon': Icons.book, 'route': '/meeting/list'},
+    {
+      'title': 'Book Room Meeting',
+      'icon': Icons.book,
+      'route': '/meeting/list'
+    },
     {'title': 'Minute Meeting', 'icon': Icons.note_alt, 'route': '/minute'},
     {'title': 'Calendar', 'icon': Icons.calendar_today, 'route': '/calendar'},
-    {'title': 'Setting', 'icon': Icons.settings, 'route': '/reports'},
+    {'title': 'Setting', 'icon': Icons.settings, 'route': '/settings'},
   ];
 
   List<Map<String, String>> userMeetings = [];
@@ -75,8 +79,8 @@ class _HomePageState extends State<HomePage> {
             final attendees = rawAttendees is List
                 ? List<String>.from(rawAttendees)
                 : rawAttendees is Map
-                ? List<String>.from(rawAttendees.values)
-                : <String>[];
+                    ? List<String>.from(rawAttendees.values)
+                    : <String>[];
 
             if (attendees.contains(email) && subVal['status'] == 'Accepted') {
               loaded.add({
@@ -97,8 +101,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -113,7 +115,8 @@ class _HomePageState extends State<HomePage> {
             icon: Icon(Icons.logout),
             onPressed: () async {
               await FirebaseAuth.instance.signOut();
-              Navigator.pushReplacementNamed(context, '/login'); // Replace with your login route
+              Navigator.pushReplacementNamed(
+                  context, '/login'); // Replace with your login route
             },
           ),
         ],
@@ -230,104 +233,107 @@ class _HomePageState extends State<HomePage> {
             child: userMeetings.isEmpty
                 ? const Center(child: Text("No accepted meetings found."))
                 : ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: userMeetings.length,
-              itemBuilder: (context, index) {
-                final meeting = userMeetings[index];
-                final rawDate = meeting['date'] ?? '';
-                final duration = meeting['duration'] ?? '-';
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: userMeetings.length,
+                    itemBuilder: (context, index) {
+                      final meeting = userMeetings[index];
+                      final rawDate = meeting['date'] ?? '';
+                      final duration = meeting['duration'] ?? '-';
 
-                final dateTime = DateTime.tryParse(rawDate);
-                final formattedDate = dateTime != null
-                    ? DateFormat('dd MMM yyyy').format(dateTime)
-                    : '-';
-                final formattedTime = dateTime != null
-                    ? DateFormat('hh:mm a').format(dateTime)
-                    : '-';
+                      final dateTime = DateTime.tryParse(rawDate);
+                      final formattedDate = dateTime != null
+                          ? DateFormat('dd MMM yyyy').format(dateTime)
+                          : '-';
+                      final formattedTime = dateTime != null
+                          ? DateFormat('hh:mm a').format(dateTime)
+                          : '-';
 
-                return GestureDetector(
-                  onTap: () {
-                    // Navigate to detail view
-                  },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: 220,
-                    margin: const EdgeInsets.only(right: 12),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      border: Border.all(color: Colors.red.shade200),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.red.withOpacity(0.15),
-                          blurRadius: 6,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          meeting['title'] ?? '-',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                      return GestureDetector(
+                        onTap: () {
+                          // Navigate to detail view
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          width: 220,
+                          margin: const EdgeInsets.only(right: 12),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            border: Border.all(color: Colors.red.shade200),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.red.withOpacity(0.15),
+                                blurRadius: 6,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                meeting['title'] ?? '-',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  const Icon(Icons.calendar_today,
+                                      size: 16, color: Colors.grey),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    formattedDate,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  const Icon(Icons.access_time,
+                                      size: 16, color: Colors.grey),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    formattedTime,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  const Icon(Icons.timelapse,
+                                      size: 16, color: Colors.grey),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    duration,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
-                            const SizedBox(width: 6),
-                            Text(
-                              formattedDate,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            const Icon(Icons.access_time, size: 16, color: Colors.grey),
-                            const SizedBox(width: 6),
-                            Text(
-                              formattedTime,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            const Icon(Icons.timelapse, size: 16, color: Colors.grey),
-                            const SizedBox(width: 6),
-                            Text(
-                              duration,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
           const SizedBox(height: 16),
         ],

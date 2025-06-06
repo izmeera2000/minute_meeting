@@ -19,6 +19,7 @@ import 'package:minute_meeting/views/auth/login.dart';
 import 'package:minute_meeting/views/auth/register.dart';
 import 'package:minute_meeting/views/meeting/create.dart';
 import 'package:minute_meeting/views/meeting/list.dart';
+import 'package:minute_meeting/views/settings/settings_list.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 FlutterLocalNotificationsPlugin();
@@ -115,6 +116,7 @@ class MyApp extends StatelessWidget {
         '/manageuser': (context) => UserManagementPage(),
         '/managemeeting': (context) => EventManagementPage(),
         '/login': (context) => AuthPage(),
+        '/settings': (context) => SettingsPage(),
 
       },
 

@@ -60,7 +60,6 @@ class Note extends KanbanBoardGroupItem {
   }
 }
 
-
 class Participant {
   String uid;
   String email;
@@ -144,6 +143,7 @@ class Meeting {
   final List<Participant> participants;
   final List<Attachment> attachments;
   final String location;
+  final String seed; // Added seed field
 
   Meeting({
     this.id,
@@ -151,14 +151,14 @@ class Meeting {
     required this.startTime,
     required this.endTime,
     this.startTime2,
-    this.notes, // optional
-
     this.endTime2,
     required this.createdBy,
     required this.date,
     required this.participants,
     required this.attachments,
     required this.location,
+    required this.seed, // Accept seed in the constructor
+    this.notes, // optional
   });
 
   Map<String, dynamic> toMap() {
@@ -171,61 +171,59 @@ class Meeting {
       'date': Timestamp.fromDate(date),
       'created_by': createdBy.map((c) => c.toMap()).toList(),
       if (notes != null) 'notes': notes!.map((n) => n.toMap()).toList(),
-
-      // Store participants as a List of Maps (each with uid inside)
       'participants': participants.map((p) => p.toMap()).toList(),
-
       'attachments': attachments.map((a) => a.toMap()).toList(),
       'location': location,
+      'seed': seed, // Include seed in the map
     };
   }
 
-factory Meeting.fromMap(Map<String, dynamic> map) {
-  // Safely parse participants
-  final participantsList = (map['participants'] is List)
-      ? (map['participants'] as List<dynamic>).map((e) {
-          final participantMap = e as Map<String, dynamic>;
-          final uid = participantMap['uid'] as String? ?? '';
-          return Participant.fromMap(uid, participantMap);
-        }).toList()
-      : <Participant>[]; // fallback to empty list if malformed
+  factory Meeting.fromMap(Map<String, dynamic> map) {
+    // Safely parse participants
+    final participantsList = (map['participants'] is List)
+        ? (map['participants'] as List<dynamic>).map((e) {
+            final participantMap = e as Map<String, dynamic>;
+            final uid = participantMap['uid'] as String? ?? '';
+            return Participant.fromMap(uid, participantMap);
+          }).toList()
+        : <Participant>[]; // fallback to empty list if malformed
 
-  final attachmentsList = (map['attachments'] is List)
-      ? (map['attachments'] as List<dynamic>)
-          .map((e) => Attachment.fromMap(e as Map<String, dynamic>))
-          .toList()
-      : <Attachment>[];
+    final attachmentsList = (map['attachments'] is List)
+        ? (map['attachments'] as List<dynamic>)
+            .map((e) => Attachment.fromMap(e as Map<String, dynamic>))
+            .toList()
+        : <Attachment>[];
 
-  final creatorList = (map['created_by'] is List)
-      ? (map['created_by'] as List<dynamic>)
-          .map((e) => Creator.fromMap(e as Map<String, dynamic>))
-          .toList()
-      : <Creator>[];
+    final creatorList = (map['created_by'] is List)
+        ? (map['created_by'] as List<dynamic>)
+            .map((e) => Creator.fromMap(e as Map<String, dynamic>))
+            .toList()
+        : <Creator>[];
 
-  final notesList = (map['notes'] is List)
-      ? (map['notes'] as List<dynamic>)
-          .map((noteMap) => Note.fromMap(noteMap))
-          .toList()
-      : null;
+    final notesList = (map['notes'] is List)
+        ? (map['notes'] as List<dynamic>)
+            .map((noteMap) => Note.fromMap(noteMap))
+            .toList()
+        : null;
 
-  return Meeting(
-    id: map['id'] as String?,
-    title: map['title'] ?? '',
-    startTime: (map['startTime'] as Timestamp).toDate(),
-    endTime: (map['endTime'] as Timestamp).toDate(),
-    startTime2: map['startTime2'] != null
-        ? (map['startTime2'] as Timestamp).toDate()
-        : null,
-    endTime2: map['endTime2'] != null
-        ? (map['endTime2'] as Timestamp).toDate()
-        : null,
-    notes: notesList,
-    date: (map['date'] as Timestamp).toDate(),
-    createdBy: creatorList,
-    participants: participantsList,
-    attachments: attachmentsList,
-    location: map['location'] ?? '',
-  );
-}
-
+    return Meeting(
+      id: map['id'] as String?,
+      title: map['title'] ?? '',
+      startTime: (map['startTime'] as Timestamp).toDate(),
+      endTime: (map['endTime'] as Timestamp).toDate(),
+      startTime2: map['startTime2'] != null
+          ? (map['startTime2'] as Timestamp).toDate()
+          : null,
+      endTime2: map['endTime2'] != null
+          ? (map['endTime2'] as Timestamp).toDate()
+          : null,
+      notes: notesList,
+      date: (map['date'] as Timestamp).toDate(),
+      createdBy: creatorList,
+      participants: participantsList,
+      attachments: attachmentsList,
+      location: map['location'] ?? '',
+      seed: map['seed'] ?? '', // Retrieve seed from the map
+    );
+  }
 }
