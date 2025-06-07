@@ -78,37 +78,23 @@ class _ManageUsersState extends State<ManageUsers> {
       final doc = await _firestore.collection('seeds').doc(seedId).get();
       final users = List<Map<String, dynamic>>.from(doc['users'] ?? []);
 
-      // Check if the current user is in the 'users' array and their role
-      bool isCurrentUserInSeed = false;
- 
-      for (var user in users) {
+      // Filter out the current user from the users list
+      final filteredUsers = users.where((user) {
         if (user['uid'] == _currentUser?.uid) {
           setState(() {
-            isCurrentUserInSeed = true;
             currentUserRole = user['role'] ??
                 ''; // Default to an empty string if role is not found
           });
-
-          break; // No need to continue once we find the current user
+          return false; // Skip the current user
         }
-      }
+        return true; // Keep all other users
+      }).toList();
 
-      // Optionally, you can store the role and user info in the state to use it later
+      // Update state without the current user
       setState(() {
-        seedUsers = users; // Save the seed users for UI display
+        seedUsers =
+            filteredUsers; // Save the filtered seed users for UI display
       });
-
-      // Debugging: Print if the user was found and their role
-      // if (isCurrentUserInSeed) {
-       // } else {
-      //   print('Current user is NOT part of this seed');
-      // }
-
-      // If needed, you can perform further logic based on the role
-      if (isCurrentUserInSeed && currentUserRole == 'admin') {
-        // Example: Do something special if the user is an admin
-        print('Current user is an admin in this seed.');
-      }
     } catch (e) {
       print("Error fetching users from seed: $e");
     } finally {
@@ -119,10 +105,10 @@ class _ManageUsersState extends State<ManageUsers> {
   }
 
   Future<void> _inviteUserByEmail(String email, String role) async {
-    if (selectedSeedId == null || email.isEmpty) return;
+    if (widget.seedId == null || email.isEmpty) return;
 
     try {
-      final seedRef = _firestore.collection('seeds').doc(selectedSeedId);
+      final seedRef = _firestore.collection('seeds').doc(widget.seedId);
       final doc = await seedRef.get();
       List<Map<String, dynamic>> users =
           List<Map<String, dynamic>>.from(doc['users'] ?? []);
@@ -165,7 +151,7 @@ class _ManageUsersState extends State<ManageUsers> {
 
       await seedRef.update({'users': users});
 
-      await _fetchSeedUsers(selectedSeedId!);
+      await _fetchSeedUsers(widget.seedId!);
 
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text("Invitation sent to $email"),
@@ -275,44 +261,116 @@ class _ManageUsersState extends State<ManageUsers> {
       },
     );
   }
+// Function to kick the user (remove from seed)
+void _kickUser(Map<String, dynamic> user) async {
+  try {
+    // Get the seed document first
+    final seedDoc = await FirebaseFirestore.instance
+        .collection('seeds')
+        .doc(widget.seedId)
+        .get();
 
-// Function to kick the user (remove from the seed)
-  void _kickUser(Map<String, dynamic> user) {
-    // Remove the user from the seed's list of users
-    FirebaseFirestore.instance.collection('seeds').doc(selectedSeedId).update({
-      'users': FieldValue.arrayRemove([user]),
-    }).then((_) {
-      print('User kicked');
-    }).catchError((error) {
-      print("Error kicking user: $error");
-    });
+    if (seedDoc.exists) {
+      final seedData = seedDoc.data();
+      final users = List<Map<String, dynamic>>.from(seedData?['users'] ?? []);
+
+      // Check if the user exists in the users array
+      bool userFound = false;
+      for (var seedUser in users) {
+        if (seedUser['uid'] == user['uid']) {
+          userFound = true;
+          break;
+        }
+      }
+
+      if (userFound) {
+        // If the user is found, proceed to remove them
+        await FirebaseFirestore.instance
+            .collection('seeds')
+            .doc(widget.seedId)
+            .update({
+          'users': FieldValue.arrayRemove([user]), // Remove the exact user
+        });
+
+        // Also update the user's seed array in the users collection
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user['uid'])
+            .update({
+          'seeds': FieldValue.arrayRemove([{
+            'seed': widget.seedId, // remove this seed from user's seeds
+          }]),
+        });
+
+        print('User kicked');
+        _fetchSeedUsers(widget.seedId);
+      } else {
+        print("User not found in this seed.");
+      }
+    } else {
+      print("Seed document does not exist.");
+    }
+  } catch (error) {
+    print("Error kicking user: $error");
   }
+}
 
-// Function to change the user's role
-  void _changeUserRole(Map<String, dynamic> user) {
-    String newRole = user['role'] == 'admin'
-        ? 'user'
-        : 'admin'; // Toggle role between admin and user
+// Function to change the user's role (in seed and users collection)
+void _changeUserRole(Map<String, dynamic> user) async {
+  String newRole = user['role'] == 'admin' ? 'user' : 'admin'; // Toggle role
 
-    // Update role in Firestore (assuming you have a collection 'seeds' and 'users' in it)
-    FirebaseFirestore.instance.collection('seeds').doc(selectedSeedId).update({
-      'users': FieldValue.arrayRemove([user]),
-    }).then((_) {
-      FirebaseFirestore.instance
-          .collection('seeds')
-          .doc(selectedSeedId)
-          .update({
-        'users': FieldValue.arrayUnion([
-          {
-            ...user,
-            'role': newRole, // Update role
-          }
-        ]),
-      });
+  try {
+    // First, remove the user from the seed's users array
+    await FirebaseFirestore.instance
+        .collection('seeds')
+        .doc(widget.seedId)
+        .update({
+      'users': FieldValue.arrayRemove([user]), // Remove the old user
     });
 
-    print('Role changed to $newRole');
+    // Then, add the user back with the new role in the seed document
+    await FirebaseFirestore.instance
+        .collection('seeds')
+        .doc(widget.seedId)
+        .update({
+      'users': FieldValue.arrayUnion([
+        {
+          ...user,
+          'role': newRole, // Update the role to newRole
+        }
+      ]),
+    });
+
+    // Also update the user's seed array in the users collection (with updated role)
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user['uid'])
+        .update({
+      'seeds': FieldValue.arrayRemove([{
+        'seed': widget.seedId,
+      }]), // Remove the old seed entry from the user
+    });
+
+    // Re-add the updated seed information for the user
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user['uid'])
+        .update({
+      'seeds': FieldValue.arrayUnion([{
+        'seed': widget.seedId,
+        'role': newRole, // Updated role in user document
+        'status': user['status'], // Assuming status stays the same
+      }]),
+    });
+
+    _fetchSeedUsers(widget.seedId);
+
+    print('User role changed to $newRole');
+  } catch (error) {
+    print("Error changing user role: $error");
   }
+}
+
 
 // Method to show the dialog for user actions (kick, change role)
   void _showUserOptionsDialog(Map<String, dynamic> user) {
@@ -357,7 +415,6 @@ class _ManageUsersState extends State<ManageUsers> {
 
   Widget _buildInviteForm() {
     // Assuming you have a variable 'isAdmin' that indicates whether the user is an admin.
- 
 
     if (currentUserRole == 'admin') {
       return Padding(

@@ -38,7 +38,23 @@ android {
 }
 
 dependencies {
-    val kotlin_version = "1.9.0" // Ganti versi ini ikut keperluan projek anda
+    // Kotlin standard library (JDK7)
+    val kotlin_version = "1.9.0" // Replace with the version you need
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version")
+
+    // Core desugaring for using Java 8+ APIs
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+
+    // Firebase BoM: Keeps all Firebase versions aligned
+    implementation(platform("com.google.firebase:firebase-bom:33.12.0"))
+
+    // Firebase SDKs (Version is determined by BoM, no version specified here)
+    implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-firestore")
+    implementation("com.google.firebase:firebase-messaging")
+    implementation("com.google.firebase:firebase-appcheck-playintegrity") // Optional: for App Check
+
+    // Google Play Services (for Auth, SafetyNet, etc.)
+    implementation("com.google.android.gms:play-services-auth:20.5.0")
 }

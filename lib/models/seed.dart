@@ -4,19 +4,46 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class SeedUser {
   final String uid;
   final String role;
+  final String status;
+  final String email;
+  final DateTime? invitedAt;
 
-  SeedUser({required this.uid, required this.role});
+  SeedUser({
+    required this.uid,
+    required this.role,
+    required this.status,
+    required this.email,
+    this.invitedAt,
+  });
 
-  factory SeedUser.fromMap(Map<String, dynamic> map) => SeedUser(
-    uid: map['uid'] ?? '',
-    role: map['role'] ?? '',
-  );
+  // Factory method to create a SeedUser from a map
+  factory SeedUser.fromMap(Map<String, dynamic> map) {
+    return SeedUser(
+      uid: map['uid'],
+      role: map['role'],
+      status: map['status'],
+      email: map['email'],
+      invitedAt: map['invited_at'] != null
+          ? (map['invited_at'] as Timestamp).toDate()
+          : null,
+    );
+  }
 
-  Map<String, dynamic> toMap() => {
-    'uid': uid,
-    'role': role,
-  };
+  // Method to convert SeedUser to a map if needed for Firestore
+  Map<String, dynamic> toMap() {
+    return {
+      'uid': uid,
+      'role': role,
+      'status': status,
+      'email': email,
+      'invited_at': invitedAt != null ? Timestamp.fromDate(invitedAt!) : null,
+    };
+  }
 }
+
+
+
+
 class Seed {
   final String seedId; // doc ID
   final String name;
@@ -76,7 +103,7 @@ class Seed {
   String? getRoleForUser(String uid) {
     return users.firstWhere(
       (u) => u.uid == uid,
-      orElse: () => SeedUser(uid: '', role: '')
+      orElse: () => SeedUser(uid: '', role: '',email: '',status:'')
     ).role;
   }
 

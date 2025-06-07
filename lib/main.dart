@@ -55,6 +55,8 @@ void main() async{
       AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(channel);
 
+      
+
   runApp(const MyApp());
 }
 
@@ -115,7 +117,7 @@ class MyApp extends StatelessWidget {
         '/manageroom': (context) => RoomManagementPage(),
         '/manageuser': (context) => UserManagementPage(),
         '/managemeeting': (context) => EventManagementPage(),
-        '/login': (context) => AuthPage(),
+        '/login': (context) => LoginPage(),
         '/settings': (context) => SettingsPage(),
 
       },

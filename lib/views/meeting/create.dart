@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart'; // For file picker (e.g., images)
+import 'package:minute_meeting/config/style.dart';
 import 'dart:io';
 
 import 'package:minute_meeting/models/meetings.dart';
@@ -24,10 +25,10 @@ class _CreateMeetingPageState extends State<CreateMeetingPage> {
   List<String> _allUsers = [];
   List<Seed> _seeds = []; // This should be a list of Seed objects
   List<Room> _rooms = []; // To store rooms under the selected seed
-  String? _selectedSeed;
+  String? selectedSeed;
   String? _selectedRoom;
 
-  User? _currentUser;
+  UserModel? currentUser;
   List<String> _selectedParticipants = []; // This will now store emails + roles
   Map<String, String> _participantRoles = {}; // Maps emails to their roles
 
@@ -41,12 +42,12 @@ class _CreateMeetingPageState extends State<CreateMeetingPage> {
         time.hour, time.minute);
   }
 
-  // Fetch all users from Firestore and the user's seeds
   Future<void> _fetchUsersAndSeeds() async {
     try {
       UserModel? currentUser = await UserModel.loadFromPrefs();
 
       if (currentUser != null) {
+        // Fetch the user's document from Firestore
         final userDoc = await FirebaseFirestore.instance
             .collection('users')
             .doc(currentUser.uid)
@@ -54,15 +55,54 @@ class _CreateMeetingPageState extends State<CreateMeetingPage> {
         final seedsFromDoc =
             List<Map<String, dynamic>>.from(userDoc['seeds'] ?? []);
 
+        // Create a list of Seed objects by filtering based on user role
+        List<Seed> filteredSeeds = [];
+
+        for (var seed in seedsFromDoc) {
+          final seedId = seed['seed']?.toString() ?? '';
+          final seedName = seed['name']?.toString() ?? '';
+
+          // Fetch the seed document from Firestore
+          final seedDoc = await FirebaseFirestore.instance
+              .collection('seeds')
+              .doc(seedId)
+              .get();
+
+          if (seedDoc.exists) {
+            final seedData = seedDoc.data();
+            final users = (seedData?['users'] as List<dynamic>)
+                .map((userMap) =>
+                    SeedUser.fromMap(userMap as Map<String, dynamic>))
+                .toList(); // Convert to List<SeedUser>
+
+            // Find the user's entry in the users list and check the role
+            final userEntry = users.firstWhere(
+              (user) => user.uid == currentUser.uid,
+              orElse: () => SeedUser(uid: '', role: '', status: '', email: ''),
+            );
+
+            if (userEntry.uid.isNotEmpty) {
+              final userRole = userEntry.role;
+              final userStatus = userEntry.status;
+
+              // Only add the seed if the user has a certain role, e.g., 'admin' or 'member'
+              // You can adjust this based on your requirement
+              if (userRole == 'admin' && userStatus == 'accepted') {
+                filteredSeeds.add(
+                  Seed(
+                    seedId: seedId,
+                    name: seedName,
+                    users: users, // Now users is a List<SeedUser>
+                  ),
+                );
+              }
+            }
+          }
+        }
+
+        // Update the state with the filtered seeds list
         setState(() {
-          // Map to get both seed name and seed ID
-          _seeds = seedsFromDoc
-              .map((seed) => Seed(
-                    name: seed['name'] as String,
-                    seedId: seed['seed'] as String,
-                     users: [],
-                  ))
-              .toList();
+          _seeds = filteredSeeds;
         });
       }
     } catch (e) {
@@ -114,28 +154,32 @@ class _CreateMeetingPageState extends State<CreateMeetingPage> {
     }
   }
 
- Future<void> _fetchRoomsForSeed(String seed) async {
-  try {
-    final roomsSnapshot = await FirebaseFirestore.instance
-        .collection('rooms')
-        .where('seedId', isEqualTo: seed)
-        .get();
+  Future<void> _fetchRoomsForSeed(String seedId) async {
+    try {
+      final roomsSnapshot = await FirebaseFirestore.instance
+          .collection('rooms')
+          .where('seed', isEqualTo: seedId)
+          .get();
 
-    setState(() {
-      _rooms = roomsSnapshot.docs
-          .map((doc) => Room.fromMap(doc.id, doc.data()))
-          .toList();
-    });
-  } catch (e) {
-    print("Error fetching rooms for seed: $e");
+      setState(() {
+        _rooms = roomsSnapshot.docs
+            .map((doc) =>
+                Room.fromMap(doc.id, doc.data() as Map<String, dynamic>))
+            .toList();
+      });
+
+      // Print the rooms map to the console
+      print("Rooms fetched successfully: $_rooms");
+    } catch (e) {
+      print("Error fetching rooms for seed: $e");
+    }
   }
-}
 
   // Create a meeting and store it in Firestore
   void _createMeeting() async {
     if (_titleController.text.isEmpty ||
         _selectedParticipants.isEmpty ||
-        _selectedSeed == null ||
+        selectedSeed == null ||
         _selectedRoom == null) {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Please fill in all fields')));
@@ -210,7 +254,7 @@ class _CreateMeetingPageState extends State<CreateMeetingPage> {
       participants: participants,
       attachments: _attachmentUrls, // Assuming this is List<Attachment>
       location: _selectedRoom!, // Now using selected room instead of text
-      seed: _selectedSeed!, // Save the selected seed as part of the meeting
+      seed: selectedSeed!, // Save the selected seed as part of the meeting
     );
 
     try {
@@ -251,6 +295,114 @@ class _CreateMeetingPageState extends State<CreateMeetingPage> {
     }
   }
 
+  void _showAddParticipantDialog() async {
+    String? selectedEmail;
+    String selectedRole = 'Attendee'; // Default role
+    List<String> roles = ['Attendee', 'Executive', 'Host']; // Adjust if needed
+
+    final seedDoc = await FirebaseFirestore.instance
+        .collection('seeds')
+        .doc(selectedSeed)
+        .get();
+
+    if (!seedDoc.exists) {
+      print("Seed with ID $selectedSeed does not exist.");
+      return; // Exit early to avoid accessing non-existent data
+    }
+
+    UserModel? currentUser = await UserModel.loadFromPrefs();
+    print("Current user UID: ${currentUser?.uid}");
+
+// Now it's safe to access fields
+    final users = List<Map<String, dynamic>>.from(seedDoc['users'] ?? [])
+        .where((u) =>
+            u['uid'] != currentUser?.uid &&
+            u['status']?.toString().toLowerCase() ==
+                'accepted') // Only accepted users
+        .toList();
+
+    final List<String> availableEmails =
+        users.map((u) => u['email'].toString()).toList();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        String manualEmail = '';
+
+        return AlertDialog(
+          title: Text("Add Participant"),
+          content: StatefulBuilder(
+            builder: (context, setState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Dropdown to pick existing user
+                  DropdownButtonFormField<String>(
+                    value: selectedEmail,
+                    decoration: InputDecoration(labelText: 'Select Email'),
+                    items: availableEmails.map((email) {
+                      return DropdownMenuItem(
+                        value: email,
+                        child: Text(email),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        selectedEmail = value;
+                        manualEmail =
+                            ''; // Clear manual email when selecting from dropdown
+                      });
+                    },
+                  ),
+
+                  SizedBox(height: 18),
+
+                  DropdownButtonFormField<String>(
+                    value: selectedRole,
+                    decoration: InputDecoration(labelText: 'Select Role'),
+                    items: roles.map((role) {
+                      return DropdownMenuItem(
+                        value: role,
+                        child: Text(role),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() {
+                          selectedRole = value;
+                        });
+                      }
+                    },
+                  ),
+                ],
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              child: Text("Cancel"),
+              onPressed: () => Navigator.pop(context),
+            ),
+            ElevatedButton(
+              child: Text("Add"),
+              onPressed: () {
+                final emailToAdd = selectedEmail ?? manualEmail;
+                if (emailToAdd.isNotEmpty &&
+                    !_selectedParticipants.contains(emailToAdd)) {
+                  setState(() {
+                    _selectedParticipants.add(emailToAdd);
+                    _participantRoles[emailToAdd] = selectedRole;
+                  });
+                }
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -260,26 +412,31 @@ class _CreateMeetingPageState extends State<CreateMeetingPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: Text('Create Meeting'),
+        backgroundColor: Colors.red,
+        foregroundColor: Colors.white,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: SingleChildScrollView(
+      body: SingleChildScrollView(
+        physics: AlwaysScrollableScrollPhysics(),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
           child: Column(
             children: [
-              // Meeting Title
-              TextField(
-                controller: _titleController,
-                decoration: InputDecoration(labelText: 'Meeting Title'),
-              ),
-              // Seed Dropdown
-              DropdownButton<String>(
-                value: _selectedSeed,
-                hint: Text("Select Seed"),
+              DropdownField(
+                value: selectedSeed,
+                label: 'Select Group',
+                hintText: 'Select Group',
+                items: _seeds.map((seed) {
+                  return DropdownMenuItem<String>(
+                    value: seed.seedId,
+                    child: Text(seed.name),
+                  );
+                }).toList(),
                 onChanged: (value) {
                   setState(() {
-                    _selectedSeed = value;
+                    selectedSeed = value;
                     _rooms.clear(); // Clear previous room selections
                   });
                   if (value != null) {
@@ -288,155 +445,101 @@ class _CreateMeetingPageState extends State<CreateMeetingPage> {
                     print(value);
                   }
                 },
-                items: _seeds.map((seed) {
-                  return DropdownMenuItem<String>(
-                    value:
-                        seed.seedId, // Use seedId as the value for the dropdown
-                    child: Text(seed.name), // Display the seed name
-                  );
-                }).toList(),
               ),
+
+              InputField(controller: _titleController, text: 'Meeting Title'),
+
+              // Seed Dropdown
+
+              // Meeting Location (No longer a free text field, it's a room now)
+              // No longer need location text input, as location is based on room.
+              SizedBox(height: 16),
+
+              DatePickerRow(
+                selectedDate: _selectedDate,
+                onDateChanged: (newDate) {
+                  setState(() {
+                    _selectedDate = newDate;
+                  });
+                },
+              ),
+
+              // Start Time
+              TimePickerRow(
+                label: 'Start Time',
+                time: _startTime,
+                onTimeChanged: (picked) {
+                  setState(() {
+                    _startTime = picked;
+                  });
+                },
+              ),
+
+              TimePickerRow(
+                label: 'End Time',
+                time: _endTime,
+                onTimeChanged: (picked) {
+                  setState(() {
+                    _endTime = picked;
+                  });
+                },
+              ),
+
               SizedBox(height: 16),
               // Room Dropdown (for selected seed)
               // Room Dropdown
-              DropdownButton<String>(
+              DropdownField(
                 value: _selectedRoom,
-                hint: Text(
-                    "Select Room"), // Display this hint when no room is selected
+                label: 'Select Room',
+                hintText: 'Select Room',
+                items: _rooms.map((room) {
+                  return DropdownMenuItem<String>(
+                    value: room.roomId, // Use unique ID
+                    child: Text(room.name), // Display room name
+                  );
+                }).toList(),
                 onChanged: (value) {
                   setState(() {
                     _selectedRoom = value; // Update selected room
                   });
                 },
-items: _rooms.map((room) {
-  return DropdownMenuItem<String>(
-    value: room.roomId,   // Use unique ID or name as string
-    child: Text(room.name), // Show the room name
-  );
-}).toList(),
-
               ),
+
+              SizedBox(height: 16),
+
               SizedBox(height: 16),
               // Participants (emails)
-              DropdownButtonFormField<String>(
-                decoration: InputDecoration(labelText: 'Select Participant'),
-                value: null, // Keep this null to avoid conflicts
-                items: _allUsers.map((String email) {
-                  return DropdownMenuItem<String>(
-                    value: email,
-                    child: Text(email),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null && !_selectedParticipants.contains(value)) {
-                    _selectParticipantRole(value); // Show dialog to select role
-                  }
-                },
-                hint: Text("Select participant(s)"),
+              ButtonCustom(
+                onPressed: _showAddParticipantDialog,
+                label: "Add Participant",
+                icon: Icons.person_add,
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
               ),
 
               SizedBox(height: 16),
 
               // Display selected participants with their roles
-              Wrap(
-                children: _selectedParticipants.map((email) {
-                  String role = _participantRoles[email] ??
-                      'Attendee'; // Default to 'Attendee' if no role selected
-                  return Chip(
-                    label: Text('$email ($role)'),
-                    onDeleted: () {
-                      setState(() {
-                        _selectedParticipants.remove(email);
-                        _participantRoles
-                            .remove(email); // Remove the role as well
-                      });
-                    },
-                  );
-                }).toList(),
+              ParticipantChips(
+                participants: _selectedParticipants,
+                roles: _participantRoles,
+                onRemove: (email) {
+                  setState(() {
+                    _selectedParticipants.remove(email);
+                    _participantRoles.remove(email);
+                  });
+                },
               ),
-              // Meeting Location (No longer a free text field, it's a room now)
-              // No longer need location text input, as location is based on room.
-              SizedBox(height: 16),
-
-              SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Selected Date: ${_selectedDate.toLocal().toString().split(' ')[0]}',
-                    style: TextStyle(fontSize: 16),
-                  ),
-                  ElevatedButton(
-                    onPressed: () async {
-                      DateTime? pickedDate = await showDatePicker(
-                        context: context,
-                        initialDate: _selectedDate,
-                        firstDate: DateTime.now()
-                            .subtract(Duration(days: 365)), // one year back
-                        lastDate: DateTime.now()
-                            .add(Duration(days: 365)), // one year forward
-                      );
-                      if (pickedDate != null && pickedDate != _selectedDate) {
-                        setState(() {
-                          _selectedDate = pickedDate;
-                        });
-                      }
-                    },
-                    child: Text('Pick Date'),
-                  ),
-                ],
-              ),
-
-              // Start Time
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Start Time: ${_startTime.format(context)}'),
-                  ElevatedButton(
-                    onPressed: () async {
-                      TimeOfDay? pickedStartTime = await showTimePicker(
-                        context: context,
-                        initialTime: _startTime,
-                      );
-                      if (pickedStartTime != null &&
-                          pickedStartTime != _startTime) {
-                        setState(() {
-                          _startTime = pickedStartTime;
-                        });
-                      }
-                    },
-                    child: Text('Pick Start Time'),
-                  ),
-                ],
-              ),
-              // End Time
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('End Time: ${_endTime.format(context)}'),
-                  ElevatedButton(
-                    onPressed: () async {
-                      TimeOfDay? pickedEndTime = await showTimePicker(
-                        context: context,
-                        initialTime: _endTime,
-                      );
-                      if (pickedEndTime != null && pickedEndTime != _endTime) {
-                        setState(() {
-                          _endTime = pickedEndTime;
-                        });
-                      }
-                    },
-                    child: Text('Pick End Time'),
-                  ),
-                ],
-              ),
-
-              SizedBox(height: 16),
               // Create Meeting Button
-              ElevatedButton(
+              SizedBox(height: 16),
+
+              ButtonCustom(
                 onPressed: _createMeeting,
-                child: Text('Create Meeting'),
+                label: "Create Meeting",
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
               ),
+              SizedBox(height: 50),
             ],
           ),
         ),

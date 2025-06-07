@@ -109,7 +109,11 @@ class _MeetingNotesKanbanPageState extends State<MeetingNotesKanbanPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Meeting Notes Kanban')),
+      appBar: AppBar(
+        title: Text('Meeting Notes Kanban'),
+        backgroundColor: Colors.red,
+        foregroundColor: Colors.white,
+      ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('meetings')
@@ -176,14 +180,20 @@ class _MeetingNotesKanbanPageState extends State<MeetingNotesKanbanPage> {
               final group = groups.firstWhere((g) => g.id == groupId);
               return Container(
                 padding: const EdgeInsets.all(8),
-                color: Colors.grey.shade300,
+                color: Colors.red,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(group.name,
-                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    Text(
+                      group.name,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
                     IconButton(
                       icon: Icon(Icons.add, size: 20),
+                      color: Colors.white,
                       tooltip: 'Add Note',
                       onPressed: () => _showAddNoteDialog(group.id),
                     ),
@@ -195,26 +205,70 @@ class _MeetingNotesKanbanPageState extends State<MeetingNotesKanbanPage> {
               final note =
                   groups.firstWhere((g) => g.id == groupId).items[itemIndex];
               return Card(
-                margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: ListTile(
-                  title: Text(note.title),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'By ${note.author} • ${_formatTimestamp(note.timestamp)}',
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                      ),
-                      SizedBox(height: 4),
-                      Text(note.content,
-                          maxLines: 2, overflow: TextOverflow.ellipsis),
-                    ],
-                  ),
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                elevation:
+                    6, // Slightly increased elevation for a more pronounced shadow
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(
+                      16), // More rounded corners for a softer look
+                ),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(
+                      16), // Ensure the ripple effect is rounded
                   onTap: () {
-                    Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => MeetingNoteDetailsPage(note: note),
-                    ));
+                    showDialog(
+                      context: context,
+                      barrierDismissible:
+                          true, // Allow dismiss by tapping outside
+                      builder: (BuildContext context) {
+                        return MeetingNoteDetailsPage(note: note);
+                      },
+                    );
                   },
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.all(
+                        20), // Increased padding for a more spacious feel
+                    title: Text(
+                      note.title,
+                      style: TextStyle(
+                        fontSize: 18, // Slightly larger font size for the title
+                        fontWeight: FontWeight
+                            .w600, // Use a semi-bold weight for better emphasis
+                        color: Colors.black87,
+                      ),
+                    ),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(
+                          top: 10.0), // Spacing between title and subtitle
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'By ${note.author} • ${_formatTimestamp(note.timestamp)}',
+                            style: TextStyle(
+                              fontSize:
+                                  14, // Increased font size for better readability
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                          const SizedBox(
+                              height:
+                                  10), // Increased height for better spacing
+                          Text(
+                            note.content,
+                            style: TextStyle(
+                              fontSize:
+                                  15, // Slightly larger font size for content
+                              color: Colors.black.withOpacity(
+                                  0.8), // More opaque text for better visibility
+                            ),
+                            maxLines: 3, // Allow more lines for content
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               );
             },
@@ -227,23 +281,56 @@ class _MeetingNotesKanbanPageState extends State<MeetingNotesKanbanPage> {
 
 class MeetingNoteDetailsPage extends StatelessWidget {
   final MeetingNote note;
+
   const MeetingNoteDetailsPage({required this.note});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(note.title)),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Author: ${note.author}', style: TextStyle(fontSize: 16)),
-            SizedBox(height: 8),
-            Text('Time: ${note.timestamp}', style: TextStyle(fontSize: 14)),
-            SizedBox(height: 16),
-            Text(note.content, style: TextStyle(fontSize: 16)),
-          ],
+    return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      elevation: 16,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                note.title,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Author: ${note.author}',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.black.withOpacity(0.7),
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Time: ${note.timestamp}',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                ),
+              ),
+              SizedBox(height: 16),
+              Text(
+                note.content,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.black.withOpacity(0.75),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

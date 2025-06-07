@@ -408,6 +408,8 @@ class _ManageSeedState extends State<ManageSeed> {
       appBar: AppBar(
         title: Text("Manage Groups"),
         backgroundColor: Colors.red,
+foregroundColor: Colors.white,
+
       ),
       body: _isLoading
           ? Center(child: CircularProgressIndicator())
@@ -490,7 +492,7 @@ class _ManageSeedState extends State<ManageSeed> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                  builder: (context) => TopNavigationPage(seedId:seed.seedId)),
+                                  builder: (context) => TopNavigationPage(seedId:seed.seedId, title:seed.name)),
                             );
                           }
                         },

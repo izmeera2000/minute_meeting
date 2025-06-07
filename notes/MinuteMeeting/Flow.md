@@ -26,8 +26,11 @@ users can upload wait approval by  init booking / setiausaha %%
 
 
 
-nota use kanban
+%% nota use kanban
+ %%
 
+
+note able to import / export or even save as favourite
 notification push notification
 
 

@@ -29,9 +29,32 @@ class _MeetingListPageState extends State<MeetingListPage> {
       UserModel? currentUser = await UserModel.loadFromPrefs();
       if (currentUser == null) return;
 
+      // Fetch the user's document from Firestore
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+
+      final userSeeds = List<Map<String, dynamic>>.from(userDoc['seeds'] ?? []);
+
+      // Get the seed IDs where the user is accepted
+      final acceptedSeedIds = userSeeds
+          .where((seed) => seed['status'] == 'accepted')
+          .map((seed) => seed['seed'])
+          .toList();
+
+      if (acceptedSeedIds.isEmpty) {
+        setState(() {
+          _meetings = [];
+        });
+        return;
+      }
+
+      // Define start and end of the selected day
       DateTime start = DateTime(date.year, date.month, date.day);
       DateTime end = start.add(Duration(days: 1));
 
+      // Query all meetings for that date range
       final snapshot = await FirebaseFirestore.instance
           .collection('meetings')
           .where('startTime', isGreaterThanOrEqualTo: start)
@@ -39,9 +62,21 @@ class _MeetingListPageState extends State<MeetingListPage> {
           .get();
 
       final meetings = snapshot.docs
-          .map((doc) => Meeting.fromMap(doc.data()))
+          .map((doc) {
+            final meeting = Meeting.fromMap(doc.data());
+
+            print('Meeting seed: ${meeting.seed}');
+            print('Participants:');
+            meeting.participants.forEach((p) {
+              print(' - ${p.email} (status: ${p.status})');
+            });
+
+            return meeting;
+          })
           .where((meeting) =>
-              meeting.participants.any((p) => p.email == currentUser.email))
+              acceptedSeedIds.contains(meeting.seed) &&
+              meeting.participants.any((p) =>
+                  p.email == currentUser.email && p.status == 'accepted'))
           .toList();
 
       setState(() {
@@ -52,11 +87,16 @@ class _MeetingListPageState extends State<MeetingListPage> {
     }
   }
 
+
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Meetings Calendar'),
+        title: Text('Meetings'),
+        backgroundColor: Colors.red,
+        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
@@ -70,6 +110,10 @@ class _MeetingListPageState extends State<MeetingListPage> {
       body: Column(
         children: [
           TableCalendar(
+            headerStyle: HeaderStyle(
+              formatButtonVisible:
+                  false, // <-- This hides the "2 weeks" format button
+            ),
             focusedDay: _focusedDay,
             firstDay: DateTime.utc(2020),
             lastDay: DateTime.utc(2030),

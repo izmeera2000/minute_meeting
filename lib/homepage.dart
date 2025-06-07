@@ -1,9 +1,14 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
+import 'package:minute_meeting/models/meetings.dart';
+import 'package:minute_meeting/models/user.dart';
+import 'package:minute_meeting/views/meeting/details.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'main.dart'; // for flutterLocalNotificationsPlugin
 
 class HomePage extends StatefulWidget {
@@ -16,7 +21,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final List<Map<String, dynamic>> menuItems = [
     {
-      'title': 'Book Room Meeting',
+      'title': 'Meetings',
       'icon': Icons.book,
       'route': '/meeting/list'
     },
@@ -27,10 +32,76 @@ class _HomePageState extends State<HomePage> {
 
   List<Map<String, String>> userMeetings = [];
 
+  List<Meeting> _meetings = [];
+  DateTime _selectedDay = DateTime.now();
+
+
+  
+  Future<void> _fetchMeetingsForDay(DateTime date) async {
+    try {
+      UserModel? currentUser = await UserModel.loadFromPrefs();
+      if (currentUser == null) return;
+
+      // Fetch the user's document from Firestore
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+
+      final userSeeds = List<Map<String, dynamic>>.from(userDoc['seeds'] ?? []);
+
+      // Get the seed IDs where the user is accepted
+      final acceptedSeedIds = userSeeds
+          .where((seed) => seed['status'] == 'accepted')
+          .map((seed) => seed['seed'])
+          .toList();
+
+      if (acceptedSeedIds.isEmpty) {
+        setState(() {
+          _meetings = [];
+        });
+        return;
+      }
+
+      // Define start and end of the selected day
+      DateTime start = DateTime(date.year, date.month, date.day);
+      DateTime end = start.add(Duration(days: 1));
+
+      // Query all meetings for that date range
+      final snapshot = await FirebaseFirestore.instance
+          .collection('meetings')
+          .where('startTime', isGreaterThanOrEqualTo: start)
+          .where('startTime', isLessThan: end)
+          .get();
+
+      final meetings = snapshot.docs
+          .map((doc) {
+            final meeting = Meeting.fromMap(doc.data());
+
+        
+
+            return meeting;
+          })
+          .where((meeting) =>
+              acceptedSeedIds.contains(meeting.seed) &&
+              meeting.participants.any((p) =>
+                  p.email == currentUser.email && p.status == 'accepted'))
+          .toList();
+
+      setState(() {
+        _meetings = meetings;
+      });
+    } catch (e) {
+      print('Error fetching meetings: $e');
+    }
+  }
+
+
+
   @override
   void initState() {
     super.initState();
-    _loadUserMeetings();
+    // _loadUserMeetings();
 
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       RemoteNotification? notification = message.notification;
@@ -56,6 +127,11 @@ class _HomePageState extends State<HomePage> {
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
       print('📬 Notification opened');
     });
+
+
+    _fetchMeetingsForDay(_selectedDay!);
+
+
   }
 
   Future<void> _loadUserMeetings() async {
@@ -114,11 +190,17 @@ class _HomePageState extends State<HomePage> {
           IconButton(
             icon: Icon(Icons.logout),
             onPressed: () async {
+              // Sign out from Firebase
               await FirebaseAuth.instance.signOut();
-              Navigator.pushReplacementNamed(
-                  context, '/login'); // Replace with your login route
+
+              // Clear SharedPreferences
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.clear();
+
+              // Navigate to login screen and replace current route
+              Navigator.pushReplacementNamed(context, '/login');
             },
-          ),
+          )
         ],
       ),
       body: Column(
@@ -228,114 +310,150 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
 
-          SizedBox(
-            height: 130,
-            child: userMeetings.isEmpty
-                ? const Center(child: Text("No accepted meetings found."))
+          // SizedBox(
+          //   height: 130,
+          //   child: userMeetings.isEmpty
+          //       ? const Center(child: Text("No accepted meetings found."))
+          //       : ListView.builder(
+          //           scrollDirection: Axis.horizontal,
+          //           padding: const EdgeInsets.symmetric(horizontal: 16),
+          //           itemCount: userMeetings.length,
+          //           itemBuilder: (context, index) {
+          //             final meeting = userMeetings[index];
+          //             final rawDate = meeting['date'] ?? '';
+          //             final duration = meeting['duration'] ?? '-';
+
+          //             final dateTime = DateTime.tryParse(rawDate);
+          //             final formattedDate = dateTime != null
+          //                 ? DateFormat('dd MMM yyyy').format(dateTime)
+          //                 : '-';
+          //             final formattedTime = dateTime != null
+          //                 ? DateFormat('hh:mm a').format(dateTime)
+          //                 : '-';
+
+          //             return GestureDetector(
+          //               onTap: () {
+          //                 // Navigate to detail view
+          //               },
+          //               child: AnimatedContainer(
+          //                 duration: const Duration(milliseconds: 200),
+          //                 width: 220,
+          //                 margin: const EdgeInsets.only(right: 12),
+          //                 padding: const EdgeInsets.all(14),
+          //                 decoration: BoxDecoration(
+          //                   color: Colors.red.shade50,
+          //                   border: Border.all(color: Colors.red.shade200),
+          //                   borderRadius: BorderRadius.circular(12),
+          //                   boxShadow: [
+          //                     BoxShadow(
+          //                       color: Colors.red.withOpacity(0.15),
+          //                       blurRadius: 6,
+          //                       offset: const Offset(0, 3),
+          //                     ),
+          //                   ],
+          //                 ),
+          //                 child: Column(
+          //                   crossAxisAlignment: CrossAxisAlignment.start,
+          //                   children: [
+          //                     Text(
+          //                       meeting['title'] ?? '-',
+          //                       style: const TextStyle(
+          //                         fontWeight: FontWeight.bold,
+          //                         fontSize: 14,
+          //                       ),
+          //                     ),
+          //                     const SizedBox(height: 6),
+          //                     Row(
+          //                       children: [
+          //                         const Icon(Icons.calendar_today,
+          //                             size: 16, color: Colors.grey),
+          //                         const SizedBox(width: 6),
+          //                         Text(
+          //                           formattedDate,
+          //                           style: const TextStyle(
+          //                             fontSize: 16,
+          //                             fontWeight: FontWeight.w600,
+          //                             color: Colors.black,
+          //                           ),
+          //                         ),
+          //                       ],
+          //                     ),
+          //                     const SizedBox(height: 6),
+          //                     Row(
+          //                       children: [
+          //                         const Icon(Icons.access_time,
+          //                             size: 16, color: Colors.grey),
+          //                         const SizedBox(width: 6),
+          //                         Text(
+          //                           formattedTime,
+          //                           style: const TextStyle(
+          //                             fontSize: 16,
+          //                             fontWeight: FontWeight.w600,
+          //                             color: Colors.black,
+          //                           ),
+          //                         ),
+          //                       ],
+          //                     ),
+          //                     const SizedBox(height: 6),
+          //                     Row(
+          //                       children: [
+          //                         const Icon(Icons.timelapse,
+          //                             size: 16, color: Colors.grey),
+          //                         const SizedBox(width: 6),
+          //                         Text(
+          //                           duration,
+          //                           style: const TextStyle(
+          //                             fontSize: 16,
+          //                             fontWeight: FontWeight.w600,
+          //                             color: Colors.black,
+          //                           ),
+          //                         ),
+          //                       ],
+          //                     ),
+          //                   ],
+          //                 ),
+          //               ),
+          //             );
+          //           },
+          //         ),
+          // ),
+         
+
+
+
+                   SizedBox(
+                    height: 150,
+            child: _meetings.isEmpty
+                ? const Center(child: Text('No meetings'))
                 : ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: userMeetings.length,
+                    itemCount: _meetings.length,
                     itemBuilder: (context, index) {
-                      final meeting = userMeetings[index];
-                      final rawDate = meeting['date'] ?? '';
-                      final duration = meeting['duration'] ?? '-';
-
-                      final dateTime = DateTime.tryParse(rawDate);
-                      final formattedDate = dateTime != null
-                          ? DateFormat('dd MMM yyyy').format(dateTime)
-                          : '-';
-                      final formattedTime = dateTime != null
-                          ? DateFormat('hh:mm a').format(dateTime)
-                          : '-';
-
-                      return GestureDetector(
-                        onTap: () {
-                          // Navigate to detail view
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          width: 220,
-                          margin: const EdgeInsets.only(right: 12),
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: Colors.red.shade50,
-                            border: Border.all(color: Colors.red.shade200),
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.red.withOpacity(0.15),
-                                blurRadius: 6,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
+                      final meeting = _meetings[index];
+                      return Card(
+                        child: ListTile(
+                          title: Text(meeting.title),
+                          subtitle: Text(
+                            '${DateFormat.jm().format(meeting.startTime)} - ${DateFormat.jm().format(meeting.endTime)}\n'
+                            'Location: ${meeting.location}',
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                meeting['title'] ?? '-',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
+                          isThreeLine: true,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    MeetingDetailsScreen(meeting: meeting),
                               ),
-                              const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  const Icon(Icons.calendar_today,
-                                      size: 16, color: Colors.grey),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    formattedDate,
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.black,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  const Icon(Icons.access_time,
-                                      size: 16, color: Colors.grey),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    formattedTime,
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.black,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  const Icon(Icons.timelapse,
-                                      size: 16, color: Colors.grey),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    duration,
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.black,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
+                            );
+                          },
                         ),
                       );
                     },
                   ),
           ),
-          const SizedBox(height: 16),
+         
+         
+        
         ],
       ),
     );

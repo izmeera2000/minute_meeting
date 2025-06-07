@@ -282,7 +282,11 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
     final meetingId = widget.meeting.id;
     if (meetingId == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Meeting Details')),
+        appBar: AppBar(
+          title: const Text('Meeting Details'),
+          backgroundColor: Colors.red,
+          foregroundColor: Colors.white,
+        ),
         body: const Center(child: Text('Meeting ID not found')),
       );
     }
@@ -290,6 +294,8 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Meeting Details'),
+        backgroundColor: Colors.red,
+        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.note_alt_outlined),
@@ -330,35 +336,86 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _sectionTitle('Date'),
-                Text(DateFormat('yyyy-MM-dd').format(meeting.date)),
+                Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Text(DateFormat('yyyy-MM-dd').format(meeting.date),
+                        style: TextStyle(fontSize: 16, color: Colors.black87)),
+                  ),
+                ),
+
                 const SizedBox(height: 12),
+
+                // Scheduled Start Time Section
                 _sectionTitle('Scheduled Start Time'),
-                Text(
-                    '${_formatDateTime(meeting.startTime)} - ${_formatDateTime(meeting.endTime)}'),
+                Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Text(
+                        '${_formatDateTime(meeting.startTime)} - ${_formatDateTime(meeting.endTime)}',
+                        style: TextStyle(fontSize: 16, color: Colors.black87)),
+                  ),
+                ),
+
                 const SizedBox(height: 12),
+
+                // Actual Start Time Section (Optional)
                 if (meeting.startTime2 != null && meeting.endTime2 != null) ...[
                   _sectionTitle('Actual Start Time'),
-                  Text(
-                      '${_formatDateTime(meeting.startTime2!)} - ${_formatDateTime(meeting.endTime2!)}'),
+                  Card(
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Text(
+                          '${_formatDateTime(meeting.startTime2!)} - ${_formatDateTime(meeting.endTime2!)}',
+                          style:
+                              TextStyle(fontSize: 16, color: Colors.black87)),
+                    ),
+                  ),
                   const SizedBox(height: 12),
                 ],
+
+                // Location Section
                 _sectionTitle('Location'),
-                Text(meeting.location),
+                Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Text(meeting.location,
+                        style: TextStyle(fontSize: 16, color: Colors.black87)),
+                  ),
+                ),
+
                 const SizedBox(height: 12),
+
+                // Created By Section
                 _sectionTitle('Created By'),
-                ...meeting.createdBy.map((c) => ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(c.name),
-                      subtitle: Text(c.email),
+                ...meeting.createdBy.map((c) => Card(
+                      elevation: 1,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      child: ListTile(
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        title: Text(c.name,
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.bold)),
+                        subtitle: Text(c.email,
+                            style: TextStyle(fontSize: 14, color: Colors.grey)),
+                      ),
                     )),
                 const SizedBox(height: 12),
-                _sectionTitle('Participants'),
-                ...meeting.participants.map((p) => ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(p.email),
-                      subtitle: Text('${p.role} • ${p.status}'),
-                    )),
-                const SizedBox(height: 12),
+
                 if (!isPending) ...[
                   _sectionTitle('Attachments'),
                   if (_currentUser != null) ...[
@@ -448,7 +505,29 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                             );
                           },
                         )),
-                ]
+                ],
+                                const SizedBox(height: 12),
+
+                // Participants Section
+                _sectionTitle('Participants'),
+                ...meeting.participants.map((p) => Card(
+                      elevation: 1,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      child: ListTile(
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        title: Text(p.email,
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.bold)),
+                        subtitle: Text(
+                          '${p.role} • ${p.status}',
+                          style: TextStyle(fontSize: 14, color: Colors.grey),
+                        ),
+                      ),
+                    )),
+                  const SizedBox(height: 50),
+
               ],
             ),
           );
@@ -506,9 +585,15 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
 
   Widget _sectionTitle(String title) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Text(title,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          color: Colors.black,
+        ),
+      ),
     );
   }
 }

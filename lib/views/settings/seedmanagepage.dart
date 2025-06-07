@@ -6,8 +6,9 @@ class TopNavigationPage extends StatefulWidget {
 
 
     final String seedId;
+    final String title;
 
-  TopNavigationPage({required this.seedId});
+  TopNavigationPage({required this.seedId,required this.title});
 
   @override
   _TopNavigationPageState createState() => _TopNavigationPageState();
@@ -37,9 +38,9 @@ class _TopNavigationPageState extends State<TopNavigationPage> with TickerProvid
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Top Navigation Example'),
+        title: Text(widget.title),
         backgroundColor: Colors.red,
-
+foregroundColor: Colors.white,
         bottom: TabBar(
           controller: _tabController,
                     indicatorColor: Colors.orange, // Change the color of the indicator

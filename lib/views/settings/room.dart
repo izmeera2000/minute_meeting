@@ -112,7 +112,7 @@ class _ManageRoomState extends State<ManageRoom> {
       print("Fetched rooms count: ${fetchedRooms.length}");
       for (var room in fetchedRooms) {
         print(
-            'Room: ${room.roomId} - ${room.name} - Seed: ${room.seed.seedId}');
+            'Room: ${room.roomId} - ${room.name} - Seed: ${room.seedId}');
         print(
             'Created At: ${room.createdAt?.toIso8601String()}'); // Debugging the createdAt field
       }
@@ -184,32 +184,28 @@ class _ManageRoomState extends State<ManageRoom> {
               ),
               onPressed: () async {
                 final name = _controller.text.trim();
-                if (name.isNotEmpty && selectedSeedId != null) {
+                if (name.isNotEmpty) {
                   try {
                     if (id == null) {
                       DateTime createdAt = DateTime.now();
 
                       await _firestore.collection('rooms').add({
                         'name': name,
-                        'seed': selectedSeedId,
+                        'seed': widget.seedId,
                         'created_at': createdAt,
                       });
                     } else {
                       await _firestore.collection('rooms').doc(id).update({
                         'name': name,
-                        'seed': selectedSeedId,
+                        'seed': widget.seedId,
                       });
                     }
                     Navigator.pop(context);
-                    if (selectedSeedId == currentSeed) {
-                      _fetchRooms(currentSeed!);
-                    } else {
-                      // If seed changed, reload rooms for the selected seed
-                      setState(() {
-                        currentSeed = selectedSeedId;
-                      });
-                      _fetchRooms(selectedSeedId!);
-                    }
+                    _fetchRooms(widget.seedId);
+                    // If seed changed, reload rooms for the selected seed
+                    setState(() {
+                      currentSeed = widget.seedId;
+                    });
                   } catch (e) {
                     print("Error saving room: $e");
                   }
@@ -264,8 +260,7 @@ class _ManageRoomState extends State<ManageRoom> {
                                     onPressed: () => _addOrEditRoom(
                                       id: room.roomId, // Room ID field
                                       currentName: room.name, // Room name field
-                                      selectedSeed: room.seed
-                                          .seedId, // Assuming you want seedId here
+                                      selectedSeed: room.seedId, // Assuming you want seedId here
                                     ),
                                     tooltip: "Edit Room",
                                   ),
@@ -283,7 +278,7 @@ class _ManageRoomState extends State<ManageRoom> {
           ),
         ],
       ),
-      floatingActionButton: currentSeed == null
+      floatingActionButton: widget.seedId == null
           ? null
           : FloatingActionButton(
               backgroundColor: Colors.red,
