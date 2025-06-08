@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:minute_meeting/config/notification.dart';
 import 'package:minute_meeting/models/seed.dart';
 import 'package:minute_meeting/models/user.dart';
 
@@ -22,7 +23,7 @@ class _ManageUsersState extends State<ManageUsers> {
   bool _isLoading = true;
   String? currentUserRole;
   final _emailController = TextEditingController();
-
+String? seedName;
   @override
   void initState() {
     super.initState();
@@ -77,6 +78,10 @@ class _ManageUsersState extends State<ManageUsers> {
       // Fetch the seed document from Firestore
       final doc = await _firestore.collection('seeds').doc(seedId).get();
       final users = List<Map<String, dynamic>>.from(doc['users'] ?? []);
+
+
+           seedName = doc['name'] ?? 'Unknown Seed'; // Default to 'Unknown Seed' if not found
+
 
       // Filter out the current user from the users list
       final filteredUsers = users.where((user) {
@@ -150,6 +155,23 @@ class _ManageUsersState extends State<ManageUsers> {
       });
 
       await seedRef.update({'users': users});
+
+      // Fetch the user's FCM token
+      final userDoc = await _firestore.collection('users').doc(uidToAdd).get();
+      final fcmToken = userDoc.data()?['fcmToken'];
+
+      if (fcmToken != null && fcmToken.isNotEmpty) {
+        // Send the push notification if the token exists
+        await sendNotificationToFCM(
+          fcmToken,
+          "You've been invited",
+          '${seedName}', // Replace this with the actual group name or dynamic data
+          'site11', // Site name or dynamic info, replace as needed
+          route: '/managegroup',
+        );
+      } else {
+        print("No FCM token for user with email $email");
+      }
 
       await _fetchSeedUsers(widget.seedId!);
 
@@ -261,116 +283,122 @@ class _ManageUsersState extends State<ManageUsers> {
       },
     );
   }
+
 // Function to kick the user (remove from seed)
-void _kickUser(Map<String, dynamic> user) async {
-  try {
-    // Get the seed document first
-    final seedDoc = await FirebaseFirestore.instance
-        .collection('seeds')
-        .doc(widget.seedId)
-        .get();
+  void _kickUser(Map<String, dynamic> user) async {
+    try {
+      // Get the seed document first
+      final seedDoc = await FirebaseFirestore.instance
+          .collection('seeds')
+          .doc(widget.seedId)
+          .get();
 
-    if (seedDoc.exists) {
-      final seedData = seedDoc.data();
-      final users = List<Map<String, dynamic>>.from(seedData?['users'] ?? []);
+      if (seedDoc.exists) {
+        final seedData = seedDoc.data();
+        final users = List<Map<String, dynamic>>.from(seedData?['users'] ?? []);
 
-      // Check if the user exists in the users array
-      bool userFound = false;
-      for (var seedUser in users) {
-        if (seedUser['uid'] == user['uid']) {
-          userFound = true;
-          break;
+        // Check if the user exists in the users array
+        bool userFound = false;
+        for (var seedUser in users) {
+          if (seedUser['uid'] == user['uid']) {
+            userFound = true;
+            break;
+          }
         }
-      }
 
-      if (userFound) {
-        // If the user is found, proceed to remove them
-        await FirebaseFirestore.instance
-            .collection('seeds')
-            .doc(widget.seedId)
-            .update({
-          'users': FieldValue.arrayRemove([user]), // Remove the exact user
-        });
+        if (userFound) {
+          // If the user is found, proceed to remove them
+          await FirebaseFirestore.instance
+              .collection('seeds')
+              .doc(widget.seedId)
+              .update({
+            'users': FieldValue.arrayRemove([user]), // Remove the exact user
+          });
 
-        // Also update the user's seed array in the users collection
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user['uid'])
-            .update({
-          'seeds': FieldValue.arrayRemove([{
-            'seed': widget.seedId, // remove this seed from user's seeds
-          }]),
-        });
+          // Also update the user's seed array in the users collection
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user['uid'])
+              .update({
+            'seeds': FieldValue.arrayRemove([
+              {
+                'seed': widget.seedId, // remove this seed from user's seeds
+              }
+            ]),
+          });
 
-        print('User kicked');
-        _fetchSeedUsers(widget.seedId);
+          print('User kicked');
+          _fetchSeedUsers(widget.seedId);
+        } else {
+          print("User not found in this seed.");
+        }
       } else {
-        print("User not found in this seed.");
+        print("Seed document does not exist.");
       }
-    } else {
-      print("Seed document does not exist.");
+    } catch (error) {
+      print("Error kicking user: $error");
     }
-  } catch (error) {
-    print("Error kicking user: $error");
   }
-}
 
 // Function to change the user's role (in seed and users collection)
-void _changeUserRole(Map<String, dynamic> user) async {
-  String newRole = user['role'] == 'admin' ? 'user' : 'admin'; // Toggle role
+  void _changeUserRole(Map<String, dynamic> user) async {
+    String newRole = user['role'] == 'admin' ? 'user' : 'admin'; // Toggle role
 
-  try {
-    // First, remove the user from the seed's users array
-    await FirebaseFirestore.instance
-        .collection('seeds')
-        .doc(widget.seedId)
-        .update({
-      'users': FieldValue.arrayRemove([user]), // Remove the old user
-    });
+    try {
+      // First, remove the user from the seed's users array
+      await FirebaseFirestore.instance
+          .collection('seeds')
+          .doc(widget.seedId)
+          .update({
+        'users': FieldValue.arrayRemove([user]), // Remove the old user
+      });
 
-    // Then, add the user back with the new role in the seed document
-    await FirebaseFirestore.instance
-        .collection('seeds')
-        .doc(widget.seedId)
-        .update({
-      'users': FieldValue.arrayUnion([
-        {
-          ...user,
-          'role': newRole, // Update the role to newRole
-        }
-      ]),
-    });
+      // Then, add the user back with the new role in the seed document
+      await FirebaseFirestore.instance
+          .collection('seeds')
+          .doc(widget.seedId)
+          .update({
+        'users': FieldValue.arrayUnion([
+          {
+            ...user,
+            'role': newRole, // Update the role to newRole
+          }
+        ]),
+      });
 
-    // Also update the user's seed array in the users collection (with updated role)
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user['uid'])
-        .update({
-      'seeds': FieldValue.arrayRemove([{
-        'seed': widget.seedId,
-      }]), // Remove the old seed entry from the user
-    });
+      // Also update the user's seed array in the users collection (with updated role)
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user['uid'])
+          .update({
+        'seeds': FieldValue.arrayRemove([
+          {
+            'seed': widget.seedId,
+          }
+        ]), // Remove the old seed entry from the user
+      });
 
-    // Re-add the updated seed information for the user
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user['uid'])
-        .update({
-      'seeds': FieldValue.arrayUnion([{
-        'seed': widget.seedId,
-        'role': newRole, // Updated role in user document
-        'status': user['status'], // Assuming status stays the same
-      }]),
-    });
+      // Re-add the updated seed information for the user
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user['uid'])
+          .update({
+        'seeds': FieldValue.arrayUnion([
+          {
+            'seed': widget.seedId,
+            'role': newRole, // Updated role in user document
+            'status': user['status'], // Assuming status stays the same
+          }
+        ]),
+      });
 
-    _fetchSeedUsers(widget.seedId);
+      _fetchSeedUsers(widget.seedId);
 
-    print('User role changed to $newRole');
-  } catch (error) {
-    print("Error changing user role: $error");
+      print('User role changed to $newRole');
+    } catch (error) {
+      print("Error changing user role: $error");
+    }
   }
-}
-
 
 // Method to show the dialog for user actions (kick, change role)
   void _showUserOptionsDialog(Map<String, dynamic> user) {
@@ -446,7 +474,7 @@ void _changeUserRole(Map<String, dynamic> user) async {
       padding: const EdgeInsets.all(16.0),
       child: DropdownButtonFormField<String>(
         decoration: InputDecoration(
-          labelText: 'Select Seed',
+          labelText: 'Select Group',
           border: OutlineInputBorder(),
         ),
         value: selectedSeedId,

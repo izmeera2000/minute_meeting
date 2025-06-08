@@ -3,11 +3,13 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:minute_meeting/config/notification.dart';
 import 'package:minute_meeting/helper/downloadpdf.dart';
 import 'package:minute_meeting/models/meetings.dart';
 import 'package:minute_meeting/models/user.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:minute_meeting/views/meeting/components/create_cmp.dart';
 import 'package:minute_meeting/views/meeting/noted.dart';
 import 'package:minute_meeting/views/meeting/notes.dart';
 import 'package:minute_meeting/views/meeting/pdf.dart';
@@ -26,11 +28,30 @@ class MeetingDetailsScreen extends StatefulWidget {
 class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
   UserModel? _currentUser;
   final TextEditingController _attachmentController = TextEditingController();
-
+  late String selectedSeed;
+  bool isHostc = false;
   @override
   void initState() {
     super.initState();
     _loadUserFromPrefs();
+    selectedSeed = widget.meeting.seed;
+  }
+
+  bool isUserStatusAccepted(Meeting meeting, String currentUserUid) {
+    // Find the participant in the meeting who matches the current user UID
+    final participant = meeting.participants.firstWhere(
+      (p) => p.uid == currentUserUid,
+      // Return null if no match is found
+    );
+
+    // Check if the participant is found and their status is 'accepted'
+    if (participant != null && participant.status == 'accepted') {
+      subscribeToTopic('meeting-${widget.meeting.id}');
+
+      return true;
+    }
+
+    return false; // Return false if the user is not found or not accepted
   }
 
   Future<void> _loadUserFromPrefs() async {
@@ -40,10 +61,8 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
     setState(() {
       _currentUser = user;
     });
-  }
 
-  String _formatDateTime(DateTime dt) {
-    return DateFormat('yyyy-MM-dd HH:mm').format(dt);
+    (isUserStatusAccepted(widget.meeting, _currentUser!.uid));
   }
 
   bool _isPending(Meeting meeting) {
@@ -65,9 +84,15 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
       (creator) => creator.uid == _currentUser!.uid,
     );
 
-    final isHostParticipant = meeting.participants.any(
-      (p) => p.uid == _currentUser!.uid && p.role.toLowerCase() == 'host',
-    );
+    final isHostParticipant = meeting.participants.any((p) {
+      final participantUid = p.uid ?? '';
+      final role = (p.role ?? '').toString().toLowerCase();
+
+      print('Checking participant: uid=$participantUid, role=$role');
+
+      return participantUid == _currentUser!.uid &&
+          (role == 'host' || role == 'executive');
+    });
 
     return isCreator || isHostParticipant;
   }
@@ -187,8 +212,196 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
     }
   }
 
+  Future<void> _toggleMeetingStatus(String newStatus) async {
+    try {
+      final meetingRef = FirebaseFirestore.instance
+          .collection('meetings')
+          .doc(widget.meeting.id);
+      // Assuming you have the seed or topic name to notify
+
+      if (newStatus == 'started') {
+        await meetingRef.update({
+          'status': newStatus,
+          'startTime2': Timestamp.now().toDate(),
+        });
+
+        String topic =
+            'meeting-${widget.meeting.id}'; // Or you can set a custom topic like 'meeting_${meeting.id}'
+        String title = 'Meeting Started';
+        String body = 'The meeting  has started.';
+        String sitename = 'site11'; // Replace with actual site name
+
+        // Send the notification
+        await sendNotificationTopic(topic, title, body, sitename);
+      } else {
+        await meetingRef.update({
+          'status': newStatus,
+          'endTime2': Timestamp.now().toDate(),
+        });
+
+        String topic =
+            'meeting-${widget.meeting.id}'; // Or you can set a custom topic like 'meeting_${meeting.id}'
+        String title = 'Meeting Started';
+        String body = 'The meeting  has started.';
+        String sitename = 'site11'; // Replace with actual site name
+
+        // Send the notification
+        await sendNotificationTopic(topic, title, body, sitename);
+      }
+    } catch (e) {
+      print("Error updating meeting status: $e");
+    }
+  }
+
+  void _showAddParticipantDialog() async {
+    String? selectedEmail;
+    String selectedRole = 'attendee'; // Default role
+    List<String> roles = ['attendee', 'executive', 'host']; // Adjust if needed
+
+    final seedDoc = await FirebaseFirestore.instance
+        .collection('seeds')
+        .doc(selectedSeed)
+        .get();
+
+    if (!seedDoc.exists) {
+      print("Seed with ID $selectedSeed does not exist.");
+      return; // Exit early to avoid accessing non-existent data
+    }
+
+    UserModel? currentUser = await UserModel.loadFromPrefs();
+    print("Current user UID: ${currentUser?.uid}");
+
+// Now it's safe to access fields
+    final users = List<Map<String, dynamic>>.from(seedDoc['users'] ?? [])
+        .where((u) =>
+            u['uid'] != currentUser?.uid &&
+            u['status']?.toString().toLowerCase() ==
+                'accepted') // Only accepted users
+        .toList();
+
+    final List<String> availableEmails =
+        users.map((u) => u['email'].toString()).toList();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        String manualEmail = '';
+
+        return AlertDialog(
+          title: Text("Add Participant"),
+          content: StatefulBuilder(
+            builder: (context, setState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Dropdown to pick existing user
+                  DropdownButtonFormField<String>(
+                    value: selectedEmail,
+                    decoration: InputDecoration(labelText: 'Select Email'),
+                    items: availableEmails.map((email) {
+                      return DropdownMenuItem(
+                        value: email,
+                        child: Text(email),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        selectedEmail = value;
+                        manualEmail =
+                            ''; // Clear manual email when selecting from dropdown
+                      });
+                    },
+                  ),
+
+                  SizedBox(height: 18),
+
+                  DropdownButtonFormField<String>(
+                    value: selectedRole,
+                    decoration: InputDecoration(labelText: 'Select Role'),
+                    items: roles.map((role) {
+                      return DropdownMenuItem(
+                        value: role,
+                        child: Text(role),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() {
+                          selectedRole = value;
+                        });
+                      }
+                    },
+                  ),
+                ],
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              child: Text("Cancel"),
+              onPressed: () => Navigator.pop(context),
+            ),
+            ElevatedButton(
+              child: Text("Add"),
+              onPressed: () async {
+                final emailToAdd = selectedEmail ?? manualEmail;
+
+                if (emailToAdd.isNotEmpty &&
+                    !widget.meeting.participants
+                        .any((p) => p.email == emailToAdd)) {
+                  try {
+                    // 🔍 Optionally get additional info for the participant (name, uid)
+                    final userQuery = await FirebaseFirestore.instance
+                        .collection('users')
+                        .where('email', isEqualTo: emailToAdd)
+                        .limit(1)
+                        .get();
+
+                    final userData = userQuery.docs.isNotEmpty
+                        ? userQuery.docs.first.data()
+                        : null;
+                    final uid = userQuery.docs.first.id;
+                    final name = userData?['name'] ?? 'Unknown';
+
+                    final newParticipant = Participant(
+                      uid: uid,
+                      email: emailToAdd,
+                      name: name,
+                      role: selectedRole,
+                      status: 'accepted',
+                    );
+
+                    // ✅ Update Firestore
+                    await FirebaseFirestore.instance
+                        .collection('meetings')
+                        .doc(widget.meeting.id)
+                        .update({
+                      'participants':
+                          FieldValue.arrayUnion([newParticipant.toMap()])
+                    });
+
+                    // ✅ Update local UI (if needed, pass a callback or setState)
+                    setState(() {
+                      widget.meeting.participants.add(newParticipant);
+                    });
+
+                    print('Participant added successfully.');
+                  } catch (e) {
+                    print('Error adding participant: $e');
+                  }
+
+                  Navigator.pop(context);
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   List<Attachment> _filteredAttachments(Meeting meeting) {
-    final isHost =
+    isHostc =
         meeting.createdBy.any((creator) => creator.uid == _currentUser?.uid);
     print(meeting.createdBy);
     print('Meeting createdBy uids: ${meeting.createdBy.map((c) => c.uid)}');
@@ -197,7 +410,7 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
       print('Attachment: ${a.filename}, status: ${a.status}');
     }
 
-    if (isHost) {
+    if (isHostc) {
       return meeting.attachments;
     } else {
       return meeting.attachments.where((a) => a.status == 'approved').toList();
@@ -326,6 +539,7 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
 
           final meetingData = snapshot.data!.data()! as Map<String, dynamic>;
           final meeting = Meeting.fromMap(meetingData);
+          print("sadasdsa  ${isHost(meeting)}");
 
           final isPending = _isPending(meeting);
           final filteredAttachments = _filteredAttachments(meeting);
@@ -335,107 +549,53 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _sectionTitle('Date'),
-                Card(
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Text(DateFormat('yyyy-MM-dd').format(meeting.date),
-                        style: TextStyle(fontSize: 16, color: Colors.black87)),
-                  ),
-                ),
+                sectionTitle('Date'),
+                DateSectionCard(date: meeting.date),
 
                 const SizedBox(height: 12),
 
                 // Scheduled Start Time Section
-                _sectionTitle('Scheduled Start Time'),
-                Card(
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Text(
-                        '${_formatDateTime(meeting.startTime)} - ${_formatDateTime(meeting.endTime)}',
-                        style: TextStyle(fontSize: 16, color: Colors.black87)),
-                  ),
+                sectionTitle('Scheduled Time'),
+                TimeRangeCard(
+                  start: meeting.startTime,
+                  end: meeting.endTime,
                 ),
 
                 const SizedBox(height: 12),
 
                 // Actual Start Time Section (Optional)
                 if (meeting.startTime2 != null && meeting.endTime2 != null) ...[
-                  _sectionTitle('Actual Start Time'),
-                  Card(
-                    elevation: 2,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: Text(
-                          '${_formatDateTime(meeting.startTime2!)} - ${_formatDateTime(meeting.endTime2!)}',
-                          style:
-                              TextStyle(fontSize: 16, color: Colors.black87)),
-                    ),
+                  sectionTitle('Actual Time'),
+                  TimeRangeCard(
+                    start: meeting.startTime2!,
+                    end: meeting.endTime2!,
                   ),
                   const SizedBox(height: 12),
                 ],
 
                 // Location Section
-                _sectionTitle('Location'),
-                Card(
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Text(meeting.location,
-                        style: TextStyle(fontSize: 16, color: Colors.black87)),
-                  ),
-                ),
+                sectionTitle('Location'),
+                LocationCard(location: meeting.location),
 
                 const SizedBox(height: 12),
 
                 // Created By Section
-                _sectionTitle('Created By'),
-                ...meeting.createdBy.map((c) => Card(
-                      elevation: 1,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                      child: ListTile(
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        title: Text(c.name,
-                            style: TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold)),
-                        subtitle: Text(c.email,
-                            style: TextStyle(fontSize: 14, color: Colors.grey)),
-                      ),
-                    )),
+                sectionTitle('Created By'),
+                ...meeting.createdBy
+                    .map((c) => CreatorCard(creator: c))
+                    .toList(),
+
                 const SizedBox(height: 12),
 
                 if (!isPending) ...[
-                  _sectionTitle('Attachments'),
                   if (_currentUser != null) ...[
                     const SizedBox(height: 12),
-                    _sectionTitle('Upload Attachment'),
-                    Row(
-                      children: [
-                        // Expanded(
-                        //   child: TextField(
-                        //     controller: _attachmentController,
-                        //     decoration: const InputDecoration(
-                        //       hintText: 'Enter attachment URL',
-                        //     ),
-                        //   ),
-                        // ),
-                        IconButton(
-                          icon: const Icon(Icons.upload_file),
-                          onPressed: () => _pickAndUploadAttachment(meeting),
-                        ),
-                      ],
+                    sectionTitle(
+                      'Attachments',
+                      buttonText: 'Add',
+                      onButtonPressed: () {
+                        _pickAndUploadAttachment(meeting);
+                      },
                     ),
                   ],
                   if (filteredAttachments.isEmpty)
@@ -445,7 +605,7 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                           contentPadding: EdgeInsets.zero,
                           leading: const Icon(Icons.insert_drive_file),
                           title: Text(
-                            _getFileName(a.url),
+                            getFileName(a.url),
                             style: const TextStyle(
                                 decoration: TextDecoration.underline,
                                 color: Colors.blue),
@@ -455,7 +615,7 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                             showDialog(
                               context: context,
                               builder: (_) => AlertDialog(
-                                title: Text(_getFileName(a.url)),
+                                title: Text(getFileName(a.url)),
                                 content: SizedBox(
                                   width: double.maxFinite,
                                   child: a.url.toLowerCase().endsWith('.pdf')
@@ -476,7 +636,7 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                                     child: const Text('Open'),
                                     onPressed: () {
                                       Navigator.pop(context);
-                                      _launchURL(context, a.url);
+                                      launchURL(context, a.url);
                                     },
                                   ),
                                   if (isHost(meeting) &&
@@ -506,10 +666,10 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                           },
                         )),
                 ],
-                                const SizedBox(height: 12),
+                const SizedBox(height: 12),
 
                 // Participants Section
-                _sectionTitle('Participants'),
+                sectionTitle('Participants'),
                 ...meeting.participants.map((p) => Card(
                       elevation: 1,
                       shape: RoundedRectangleBorder(
@@ -526,8 +686,7 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                         ),
                       ),
                     )),
-                  const SizedBox(height: 50),
-
+                const SizedBox(height: 50),
               ],
             ),
           );
@@ -547,97 +706,114 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
 
           final isPending = _isPending(meeting);
 
-          if (!isPending) return const SizedBox.shrink();
+          if (isPending) {
+            return FloatingActionButton.extended(
+              icon: const Icon(Icons.check),
+              label: const Text("Accept Invite"),
+              onPressed: () async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    title: const Text("Accept Invitation"),
+                    content: const Text(
+                        "Do you want to accept this meeting invitation?"),
+                    actions: [
+                      TextButton(
+                        child: const Text("Cancel"),
+                        onPressed: () => Navigator.pop(context, false),
+                      ),
+                      ElevatedButton(
+                        child: const Text("Accept"),
+                        onPressed: () => Navigator.pop(context, true),
+                      ),
+                    ],
+                  ),
+                );
 
-          return FloatingActionButton.extended(
-            icon: const Icon(Icons.check),
-            label: const Text("Accept Invite"),
-            onPressed: () async {
-              final confirmed = await showDialog<bool>(
-                context: context,
-                builder: (_) => AlertDialog(
-                  title: const Text("Accept Invitation"),
-                  content: const Text(
-                      "Do you want to accept this meeting invitation?"),
-                  actions: [
-                    TextButton(
-                      child: const Text("Cancel"),
-                      onPressed: () => Navigator.pop(context, false),
-                    ),
-                    ElevatedButton(
-                      child: const Text("Accept"),
-                      onPressed: () => Navigator.pop(context, true),
-                    ),
-                  ],
+                if (confirmed == true) {
+                  await _acceptInvitation(meeting);
+                  setState(() {});
+                }
+              },
+            );
+          }
+
+          // Show "Start" or "Stop" button for the host
+          // Show "Start" or "Stop" button for the host
+if (isHostc) {
+  // Get today's date for comparison
+  final today = DateTime.now();
+  final meetingDate = widget.meeting.date;
+  
+  // Only show FloatingActionButton if the meeting is today and the status is not 'ended'
+  if (meetingDate.year == today.year &&
+      meetingDate.month == today.month &&
+      meetingDate.day == today.day &&
+      meeting.status != 'ended') {
+    
+    return FloatingActionButton.extended(
+      icon: Icon(
+        meeting.status == null || meeting.status == 'not_started'
+            ? Icons.play_arrow // Show play button if not started
+            : Icons.stop, // Show stop button if started
+      ),
+      label: Text(
+        meeting.status == null || meeting.status == 'not_started'
+            ? "Start Meeting"
+            : "End Meeting", // Change label depending on status
+      ),
+      onPressed: () async {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text(meeting.status == null || meeting.status == 'not_started'
+                ? "Start the meeting"
+                : "End the meeting"),
+            content: Text(meeting.status == null || meeting.status == 'not_started'
+                ? "Do you want to start the meeting?"
+                : "Do you want to end the meeting?"),
+            actions: [
+              TextButton(
+                child: const Text("Cancel"),
+                onPressed: () => Navigator.pop(context, false),
+              ),
+              ElevatedButton(
+                child: Text(
+                  meeting.status == null || meeting.status == 'not_started'
+                      ? "Start"
+                      : "End",
                 ),
-              );
+                onPressed: () => Navigator.pop(context, true),
+              ),
+            ],
+          ),
+        );
 
-              if (confirmed == true) {
-                await _acceptInvitation(meeting);
-                setState(() {});
-              }
-            },
-          );
+        if (confirmed == true) {
+          // If the meeting is not started, set it to 'started'
+          if (meeting.status == null || meeting.status == 'not_started') {
+            // Change the meeting status to 'started'
+            await _toggleMeetingStatus('started');
+          } else {
+            // End the meeting if it's started
+            await _toggleMeetingStatus('ended');
+          }
+
+          setState(() {}); // Refresh the UI after the action
+        }
+      },
+    );
+  }
+  
+  // If the meeting status is 'ended', or the meeting isn't today, no FloatingActionButton
+  return SizedBox.shrink(); // Empty widget, no button
+}
+
+
+          // If the user is not the host and the status is not pending, don't show anything
+          return const SizedBox.shrink();
         },
       ),
     );
-  }
-
-  Widget _sectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          color: Colors.black,
-        ),
-      ),
-    );
-  }
-}
-
-String _getFileName(String url) {
-  try {
-    final segments = Uri.parse(url).pathSegments;
-    final lastSegment = segments.isNotEmpty ? segments.last : 'unknown_file';
-    return Uri.decodeFull(lastSegment.split('?').first);
-  } catch (e) {
-    return 'unknown_file';
-  }
-}
-
-void _launchURL(BuildContext context, String url) async {
-  final fileName = _getFileName(url);
-
-  if (fileName.toLowerCase().endsWith('.pdf')) {
-    // It's a PDF – download and view it
-    try {
-      final filePath = await downloadPdf(url, fileName);
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => PdfViewPage(filePath: filePath)),
-      );
-    } catch (e) {
-      debugPrint('Error opening PDF: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load PDF: $e')),
-      );
-    }
-  } else {
-    // Not a PDF – launch in external browser
-    final uri = Uri.parse(url);
-    try {
-      final canLaunch = await canLaunchUrl(uri);
-      debugPrint('canLaunch: $canLaunch');
-      if (!canLaunch) throw 'Cannot launch';
-
-      final launched =
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!launched) debugPrint('Launch failed');
-    } catch (e) {
-      debugPrint('Error launching URL: $e');
-    }
   }
 }

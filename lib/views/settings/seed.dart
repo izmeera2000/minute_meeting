@@ -106,10 +106,10 @@ class _ManageSeedState extends State<ManageSeed> {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(existingSeedId == null ? 'Add New Seed' : 'Update Seed'),
+        title: Text(existingSeedId == null ? 'Add New Group' : 'Update Group'),
         content: TextField(
           controller: _controller,
-          decoration: InputDecoration(hintText: "Seed Title"),
+          decoration: InputDecoration(hintText: "Group Title"),
         ),
         actions: [
           TextButton(

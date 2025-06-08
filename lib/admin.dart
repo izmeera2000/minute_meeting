@@ -29,26 +29,26 @@ class _HomePageAdminState extends State<HomePageAdmin> {
     super.initState();
     _loadUserMeetings();
 
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      RemoteNotification? notification = message.notification;
-      AndroidNotification? android = message.notification?.android;
+    // FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    //   RemoteNotification? notification = message.notification;
+    //   AndroidNotification? android = message.notification?.android;
 
-      if (notification != null && android != null) {
-        flutterLocalNotificationsPlugin.show(
-          notification.hashCode,
-          notification.title,
-          notification.body,
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'channel_id',
-              'Default Channel',
-              importance: Importance.max,
-              priority: Priority.high,
-            ),
-          ),
-        );
-      }
-    });
+    //   if (notification != null && android != null) {
+    //     flutterLocalNotificationsPlugin.show(
+    //       notification.hashCode,
+    //       notification.title,
+    //       notification.body,
+    //       const NotificationDetails(
+    //         android: AndroidNotificationDetails(
+    //           'channel_id',
+    //           'Default Channel',
+    //           importance: Importance.max,
+    //           priority: Priority.high,
+    //         ),
+    //       ),
+    //     );
+    //   }
+    // });
 
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
       print('📬 Notification opened');

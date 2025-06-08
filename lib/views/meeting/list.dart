@@ -38,10 +38,7 @@ class _MeetingListPageState extends State<MeetingListPage> {
       final userSeeds = List<Map<String, dynamic>>.from(userDoc['seeds'] ?? []);
 
       // Get the seed IDs where the user is accepted
-      final acceptedSeedIds = userSeeds
-          .where((seed) => seed['status'] == 'accepted')
-          .map((seed) => seed['seed'])
-          .toList();
+      final acceptedSeedIds = userSeeds.map((seed) => seed['seed']).toList();
 
       if (acceptedSeedIds.isEmpty) {
         setState(() {
@@ -65,18 +62,31 @@ class _MeetingListPageState extends State<MeetingListPage> {
           .map((doc) {
             final meeting = Meeting.fromMap(doc.data());
 
+            // Find the current user's status in the meeting
+            String userStatus = 'Not Invited'; // Default value
+            for (var participant in meeting.participants) {
+              if (participant.email == currentUser.email) {
+                userStatus = participant.status ??
+                    'Not Invited'; // 'pending', 'accepted', 'declined', etc.
+                break;
+              }
+            }
+
+            // Print debug information
             print('Meeting seed: ${meeting.seed}');
             print('Participants:');
             meeting.participants.forEach((p) {
               print(' - ${p.email} (status: ${p.status})');
             });
 
+            // Add the user status to the meeting object
+            meeting.userStatus = userStatus;
+
             return meeting;
           })
           .where((meeting) =>
               acceptedSeedIds.contains(meeting.seed) &&
-              meeting.participants.any((p) =>
-                  p.email == currentUser.email && p.status == 'accepted'))
+              meeting.participants.any((p) => p.email == currentUser.email))
           .toList();
 
       setState(() {
@@ -86,9 +96,6 @@ class _MeetingListPageState extends State<MeetingListPage> {
       print('Error fetching meetings: $e');
     }
   }
-
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -146,7 +153,22 @@ class _MeetingListPageState extends State<MeetingListPage> {
                       final meeting = _meetings[index];
                       return Card(
                         child: ListTile(
-                          title: Text(meeting.title),
+                          title: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(meeting.title),
+                              // Display the current user's status
+                              if (meeting.userStatus == 'pending')
+                                Text(
+                                  meeting.userStatus ?? 'No Status',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors
+                                        .orange, // Orange color for "pending" status
+                                  ),
+                                ),
+                            ],
+                          ),
                           subtitle: Text(
                             '${DateFormat.jm().format(meeting.startTime)} - ${DateFormat.jm().format(meeting.endTime)}\n'
                             'Location: ${meeting.location}',

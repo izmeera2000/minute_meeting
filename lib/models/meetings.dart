@@ -144,6 +144,8 @@ class Meeting {
   final List<Attachment> attachments;
   final String location;
   final String seed; // Added seed field
+  String? userStatus; // Current user's status for this meeting
+  String? status; // Added status field for the meeting
 
   Meeting({
     this.id,
@@ -159,6 +161,8 @@ class Meeting {
     required this.location,
     required this.seed, // Accept seed in the constructor
     this.notes, // optional
+    this.userStatus,
+    this.status, // Include status in the constructor
   });
 
   Map<String, dynamic> toMap() {
@@ -175,6 +179,7 @@ class Meeting {
       'attachments': attachments.map((a) => a.toMap()).toList(),
       'location': location,
       'seed': seed, // Include seed in the map
+      if (status != null) 'status': status, // Add status to the map
     };
   }
 
@@ -224,6 +229,7 @@ class Meeting {
       attachments: attachmentsList,
       location: map['location'] ?? '',
       seed: map['seed'] ?? '', // Retrieve seed from the map
+      status: map['status'], // Retrieve status from the map (nullable)
     );
   }
 }

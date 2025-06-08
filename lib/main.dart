@@ -19,91 +19,193 @@ import 'package:minute_meeting/views/auth/login.dart';
 import 'package:minute_meeting/views/auth/register.dart';
 import 'package:minute_meeting/views/meeting/create.dart';
 import 'package:minute_meeting/views/meeting/list.dart';
+import 'package:minute_meeting/views/settings/seed.dart';
 import 'package:minute_meeting/views/settings/settings_list.dart';
 
-final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-FlutterLocalNotificationsPlugin();
-
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-}
-
-void main() async{
-
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform,
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
   );
-  const AndroidInitializationSettings initializationSettingsAndroid =
-  AndroidInitializationSettings('@mipmap/ic_launcher');
-  const InitializationSettings initializationSettings =
-  InitializationSettings(android: initializationSettingsAndroid);
-  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+
+  // Ensure FirebaseMessaging background handling is set
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-
-  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
-
-  // ✅ Register high importance channel
-  const AndroidNotificationChannel channel = AndroidNotificationChannel(
-    'high_importance_channel', // ID must match above
-    'High Importance Notifications',
-    description: 'Used for critical notifications',
-    importance: Importance.max,
-  );
-
-  await flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<
-      AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(channel);
-
-      
 
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+// Handle background messages
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  // You can handle background notifications here
+  print("Handling background message: ${message.messageId}");
+}
+
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+  static GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+  @override
+  void initState() {
+    super.initState();
+    initNotifications();
+
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      print('Notification clicked: ${message}');
+      _handleMessageNavigation(message.data);
+    });
+
+// Also handle if app is launched from a terminated state
+    FirebaseMessaging.instance.getInitialMessage().then((message) {
+      if (message != null) {
+        _handleMessageNavigation(message.data);
+      }
+    });
+
+    FirebaseMessaging.instance
+        .getInitialMessage()
+        .then((RemoteMessage? message) {
+      if (message != null) {
+        print('App launched from terminated with: ${message.data}');
+        _handleMessageNavigation(message.data);
+      }
+    });
+  }
+
+  void showGeneralNotification(RemoteNotification notification,
+      {String? route}) {
+    const androidDetails = AndroidNotificationDetails(
+      'general_channel',
+      'General Notifications',
+      importance: Importance.max,
+      priority: Priority.high,
+    );
+
+    const notificationDetails = NotificationDetails(android: androidDetails);
+
+    flutterLocalNotificationsPlugin.show(
+      notification.hashCode,
+      notification.title,
+      notification.body,
+      notificationDetails,
+      payload: route ?? '', // pass route here as payload
+    );
+  }
+
+  void initNotifications() async {
+    // Android init
+    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    // Optional: handle tap when notification is clicked
+    const initSettings = InitializationSettings(android: androidInit);
+    await flutterLocalNotificationsPlugin.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        final payload = response.payload;
+        print('Notification clicked: $payload');
+
+        if (payload != null && payload.isNotEmpty) {
+          // Use your navigator key to navigate to the route
+          navigatorKey.currentState?.pushNamed(payload);
+        }
+      },
+    );
+
+    // Ask for permissions
+    final settings = await FirebaseMessaging.instance.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      print('User granted permission');
+
+      // For iOS: show alert even when app is in foreground
+      await FirebaseMessaging.instance
+          .setForegroundNotificationPresentationOptions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
+      // Handle foreground notifications
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        final notification = message.notification;
+        final android = message.notification?.android;
+        final route = message.data['route']; // get route from data payload
+
+        debugPrint('FCM onMessage received');
+        debugPrint('Notification title: ${notification?.title}');
+        debugPrint('Notification body: ${notification?.body}');
+        debugPrint('Android notification? ${android != null}');
+        debugPrint('Route from data payload: $route');
+
+        if (notification != null && android != null) {
+          showGeneralNotification(notification, route: route);
+        } else {
+          debugPrint('No valid notification or android data found.');
+        }
+      });
+    } else {
+      print('User declined or has not accepted permission');
+    }
+  }
+
+  void _handleMessageNavigation(Map<String, dynamic> data) {
+    final context = navigatorKey.currentContext;
+    if (context == null) return;
+
+    if (data.containsKey('route')) {
+      final route = data['route'];
+      Navigator.pushNamed(context, route);
+    } else if (data['screen'] == 'details') {
+      Navigator.pushNamed(
+        context,
+        '/details',
+        arguments: {'id': data['itemId']},
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
+      title: 'Minute Meeting',
       theme: ThemeData(
-        primaryColor: Color(0xFFCAC5C0), // Matches theme
-        scaffoldBackgroundColor: Color(0xFFECEAEA), // Background color
-
+        primaryColor: const Color(0xFFCAC5C0),
+        scaffoldBackgroundColor: const Color(0xFFECEAEA),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: Colors.white, // Background for input fields
-
-          // Default border style
+          fillColor: Colors.white,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(20),
-            borderSide: BorderSide(color: Color(0xFF7D5A40)),
+            borderSide: const BorderSide(color: Color(0xFF7D5A40)),
           ),
-
-          // Border when the field is clicked (focused)
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(20),
-            borderSide: BorderSide(color: Color(0xFF7D5A40), width: 2.0),
+            borderSide: const BorderSide(color: Color(0xFF7D5A40), width: 2.0),
           ),
-
-          // Border when the field is enabled but not focused
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(20),
-            borderSide: BorderSide(color: Color(0xFFCAC5C0)),
+            borderSide: const BorderSide(color: Color(0xFFCAC5C0)),
           ),
-
-          // Set label color when the field is focused
-          floatingLabelStyle: TextStyle(
-            color: Color(0xFF7D5A40), // Custom theme color instead of blue
+          floatingLabelStyle: const TextStyle(
+            color: Color(0xFF7D5A40),
             fontWeight: FontWeight.bold,
           ),
-
-          // Label style when not focused
-          labelStyle: TextStyle(
-            color: Colors.black,
-          ),
+          labelStyle: const TextStyle(color: Colors.black),
         ),
       ),
       routes: {
@@ -114,15 +216,13 @@ class MyApp extends StatelessWidget {
         '/minute': (context) => MinuteMeetingListPage(),
         '/calendar': (context) => DotCalendarPage(),
         '/reports': (context) => ProfilePage(),
+        '/managegroup': (context) =>  ManageSeed(),
         '/manageroom': (context) => RoomManagementPage(),
         '/manageuser': (context) => UserManagementPage(),
         '/managemeeting': (context) => EventManagementPage(),
         '/login': (context) => LoginPage(),
         '/settings': (context) => SettingsPage(),
-
       },
-
-      title: 'Minute Meeting',
     );
   }
 }

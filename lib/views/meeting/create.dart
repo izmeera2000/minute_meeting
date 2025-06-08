@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart'; // For file picker (e.g., images)
+import 'package:minute_meeting/config/notification.dart';
 import 'package:minute_meeting/config/style.dart';
 import 'dart:io';
 
@@ -27,9 +28,11 @@ class _CreateMeetingPageState extends State<CreateMeetingPage> {
   List<Room> _rooms = []; // To store rooms under the selected seed
   String? selectedSeed;
   String? _selectedRoom;
+  Map<String, dynamic>? selectedUser;
+  String? selectedUserUid; // store uid only
 
   UserModel? currentUser;
-  List<String> _selectedParticipants = []; // This will now store emails + roles
+  List<Map<String, dynamic>> _selectedParticipants = [];
   Map<String, String> _participantRoles = {}; // Maps emails to their roles
 
   DateTime _selectedDate = DateTime.now();
@@ -110,50 +113,6 @@ class _CreateMeetingPageState extends State<CreateMeetingPage> {
     }
   }
 
-  Future<void> _selectParticipantRole(String email) async {
-    String? selectedRole = await showDialog<String>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text("Select Role for $email"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                title: Text("Host"),
-                onTap: () {
-                  Navigator.of(context).pop('host');
-                },
-              ),
-              ListTile(
-                title: Text("Moderator"),
-                onTap: () {
-                  Navigator.of(context).pop('moderator');
-                },
-              ),
-              ListTile(
-                title: Text("Attendee"),
-                onTap: () {
-                  Navigator.of(context).pop('attendee');
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    // If a role was selected, add the participant with the selected role
-    if (selectedRole != null) {
-      setState(() {
-        _participantRoles[email] = selectedRole; // Store the role for the email
-        if (!_selectedParticipants.contains(email)) {
-          _selectedParticipants.add(email); // Add the email to the list
-        }
-      });
-    }
-  }
-
   Future<void> _fetchRoomsForSeed(String seedId) async {
     try {
       final roomsSnapshot = await FirebaseFirestore.instance
@@ -207,18 +166,19 @@ class _CreateMeetingPageState extends State<CreateMeetingPage> {
     final Map<String, QueryDocumentSnapshot> emailToUserDoc = {
       for (var doc in allUsersSnapshot.docs) (doc.data()['email'] ?? ''): doc
     };
+    for (var participant in _selectedParticipants) {
+      final email = participant['email'];
+      final uid = participant['uid'];
+      final name = participant['name'];
+      final role = participant['role'];
 
-    for (String email in _selectedParticipants) {
-      if (emailToUserDoc.containsKey(email)) {
-        var userDoc = emailToUserDoc[email]!;
-        var data = userDoc.data() as Map<String, dynamic>; // cast here
-
+      if (email != null && uid != null) {
         participants.add(
           Participant(
-            uid: userDoc.id,
+            uid: uid,
             email: email,
-            name: data['name'] ?? '', // now safe
-            role: 'participant',
+            name: name ?? '',
+            role: role ?? '',
             status: 'pending',
           ),
         );
@@ -265,6 +225,31 @@ class _CreateMeetingPageState extends State<CreateMeetingPage> {
       // Save Firestore doc ID inside the document itself
       await docRef.update({'id': docRef.id});
 
+      for (Participant participant in participants) {
+        // Skip sending notification to the host
+        // if (participant.uid == currentUser.uid) continue;
+
+        // Fetch user's FCM token from Firestore
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(participant.uid)
+            .get();
+
+        final fcmToken = userDoc.data()?['fcmToken'];
+        print(fcmToken);
+
+        if (fcmToken != null && fcmToken.isNotEmpty) {
+          await sendNotificationToFCM(
+            fcmToken,
+            "You've been invited!",
+            'New meeting: ${meeting.title}',
+            'site11',
+          );
+        } else {
+          print("No FCM token for ${participant.name}");
+        }
+      }
+
       final meetingWithId = Meeting(
         id: docRef.id,
         title: meeting.title,
@@ -282,7 +267,7 @@ class _CreateMeetingPageState extends State<CreateMeetingPage> {
         const SnackBar(content: Text('Meeting created successfully')),
       );
 
-      Navigator.push(
+      Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (_) => MeetingDetailsScreen(meeting: meetingWithId),
@@ -297,8 +282,8 @@ class _CreateMeetingPageState extends State<CreateMeetingPage> {
 
   void _showAddParticipantDialog() async {
     String? selectedEmail;
-    String selectedRole = 'Attendee'; // Default role
-    List<String> roles = ['Attendee', 'Executive', 'Host']; // Adjust if needed
+    String selectedRole = 'attendee'; // Default role
+    List<String> roles = ['attendee', 'executive', 'host']; // Adjust if needed
 
     final seedDoc = await FirebaseFirestore.instance
         .collection('seeds')
@@ -313,16 +298,32 @@ class _CreateMeetingPageState extends State<CreateMeetingPage> {
     UserModel? currentUser = await UserModel.loadFromPrefs();
     print("Current user UID: ${currentUser?.uid}");
 
-// Now it's safe to access fields
-    final users = List<Map<String, dynamic>>.from(seedDoc['users'] ?? [])
-        .where((u) =>
-            u['uid'] != currentUser?.uid &&
-            u['status']?.toString().toLowerCase() ==
-                'accepted') // Only accepted users
+// Debug: print the entire seedDoc
+    print('seedDoc: $seedDoc');
+
+// Debug: print current user UID
+    print('Current User UID: ${currentUser?.uid}');
+
+// Extract the users list
+    final List<dynamic>? rawUsers = seedDoc['users'];
+    print('Raw users list: $rawUsers');
+
+// Safely convert to List<Map<String, dynamic>> and filter
+    final List<Map<String, dynamic>>? availableUsers = rawUsers
+        ?.where((u) {
+          final uid = u['uid'];
+          final status = u['status']?.toString().toLowerCase();
+
+          // Debug: Print each user’s info
+          print('Checking user: uid=$uid, status=$status');
+
+          return uid != currentUser?.uid && status == 'accepted';
+        })
+        .map<Map<String, dynamic>>((u) => Map<String, dynamic>.from(u))
         .toList();
 
-    final List<String> availableEmails =
-        users.map((u) => u['email'].toString()).toList();
+// Final debug print
+    print('Filtered availableUsers: $availableUsers');
 
     showDialog(
       context: context,
@@ -336,27 +337,30 @@ class _CreateMeetingPageState extends State<CreateMeetingPage> {
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Dropdown to pick existing user
                   DropdownButtonFormField<String>(
-                    value: selectedEmail,
-                    decoration: InputDecoration(labelText: 'Select Email'),
-                    items: availableEmails.map((email) {
-                      return DropdownMenuItem(
-                        value: email,
-                        child: Text(email),
+                    value: selectedUserUid != null &&
+                            availableUsers!
+                                .any((u) => u['uid'] == selectedUserUid)
+                        ? selectedUserUid
+                        : null,
+                    decoration: const InputDecoration(labelText: 'Select User'),
+                    items: availableUsers?.map((user) {
+                      return DropdownMenuItem<String>(
+                        value: user['uid'],
+                        child: Text(user['email'] ?? 'No Email'),
                       );
                     }).toList(),
-                    onChanged: (value) {
+                    onChanged: (uid) {
                       setState(() {
-                        selectedEmail = value;
-                        manualEmail =
-                            ''; // Clear manual email when selecting from dropdown
+                        selectedUserUid = uid;
+                        manualEmail = '';
                       });
                     },
+                    hint: const Text('Please select a user'),
+                    validator: (value) =>
+                        value == null ? 'Please select a user' : null,
                   ),
-
                   SizedBox(height: 18),
-
                   DropdownButtonFormField<String>(
                     value: selectedRole,
                     decoration: InputDecoration(labelText: 'Select Role'),
@@ -386,13 +390,26 @@ class _CreateMeetingPageState extends State<CreateMeetingPage> {
             ElevatedButton(
               child: Text("Add"),
               onPressed: () {
-                final emailToAdd = selectedEmail ?? manualEmail;
-                if (emailToAdd.isNotEmpty &&
-                    !_selectedParticipants.contains(emailToAdd)) {
+                final user = availableUsers?.firstWhere(
+                  (u) => u['uid'] == selectedUserUid,
+                  orElse: () => {}, // empty map fallback to prevent crash
+                );
+
+
+                final alreadyAdded = _selectedParticipants
+                    .any((p) => p['uid'] == selectedUserUid);
+
+                if (!alreadyAdded) {
                   setState(() {
-                    _selectedParticipants.add(emailToAdd);
-                    _participantRoles[emailToAdd] = selectedRole;
+                    _selectedParticipants.add({
+                      'uid': user?['uid'],
+                      'name': user?['name'],
+                      'email': user?['email'],
+                      'role': selectedRole!, // chosen role
+                    });
                   });
+                } else {
+                  print("alr");
                 }
                 Navigator.pop(context);
               },
@@ -519,14 +536,11 @@ class _CreateMeetingPageState extends State<CreateMeetingPage> {
 
               SizedBox(height: 16),
 
-              // Display selected participants with their roles
               ParticipantChips(
                 participants: _selectedParticipants,
-                roles: _participantRoles,
-                onRemove: (email) {
+                onRemove: (user) {
                   setState(() {
-                    _selectedParticipants.remove(email);
-                    _participantRoles.remove(email);
+                    _selectedParticipants.remove(user);
                   });
                 },
               ),

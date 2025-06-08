@@ -5,6 +5,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
+import 'package:minute_meeting/config/notification.dart';
 import 'package:minute_meeting/models/meetings.dart';
 import 'package:minute_meeting/models/user.dart';
 import 'package:minute_meeting/views/meeting/details.dart';
@@ -20,23 +21,17 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final List<Map<String, dynamic>> menuItems = [
-    {
-      'title': 'Meetings',
-      'icon': Icons.book,
-      'route': '/meeting/list'
-    },
+    {'title': 'Meetings', 'icon': Icons.book, 'route': '/meeting/list'},
     {'title': 'Minute Meeting', 'icon': Icons.note_alt, 'route': '/minute'},
     {'title': 'Calendar', 'icon': Icons.calendar_today, 'route': '/calendar'},
     {'title': 'Setting', 'icon': Icons.settings, 'route': '/settings'},
   ];
 
   List<Map<String, String>> userMeetings = [];
-
+  late String uid;
   List<Meeting> _meetings = [];
   DateTime _selectedDay = DateTime.now();
 
-
-  
   Future<void> _fetchMeetingsForDay(DateTime date) async {
     try {
       UserModel? currentUser = await UserModel.loadFromPrefs();
@@ -51,10 +46,7 @@ class _HomePageState extends State<HomePage> {
       final userSeeds = List<Map<String, dynamic>>.from(userDoc['seeds'] ?? []);
 
       // Get the seed IDs where the user is accepted
-      final acceptedSeedIds = userSeeds
-          .where((seed) => seed['status'] == 'accepted')
-          .map((seed) => seed['seed'])
-          .toList();
+      final acceptedSeedIds = userSeeds.map((seed) => seed['seed']).toList();
 
       if (acceptedSeedIds.isEmpty) {
         setState(() {
@@ -78,14 +70,31 @@ class _HomePageState extends State<HomePage> {
           .map((doc) {
             final meeting = Meeting.fromMap(doc.data());
 
-        
+            // Find the current user's status in the meeting
+            String userStatus = 'Not Invited'; // Default value
+            for (var participant in meeting.participants) {
+              if (participant.email == currentUser.email) {
+                userStatus = participant.status ??
+                    'Not Invited'; // 'pending', 'accepted', 'declined', etc.
+                break;
+              }
+            }
+
+            // Print debug information
+            print('Meeting seed: ${meeting.seed}');
+            print('Participants:');
+            meeting.participants.forEach((p) {
+              print(' - ${p.email} (status: ${p.status})');
+            });
+
+            // Add the user status to the meeting object
+            meeting.userStatus = userStatus;
 
             return meeting;
           })
           .where((meeting) =>
               acceptedSeedIds.contains(meeting.seed) &&
-              meeting.participants.any((p) =>
-                  p.email == currentUser.email && p.status == 'accepted'))
+              meeting.participants.any((p) => p.email == currentUser.email ))
           .toList();
 
       setState(() {
@@ -96,85 +105,12 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-
-
   @override
   void initState() {
     super.initState();
     // _loadUserMeetings();
 
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      RemoteNotification? notification = message.notification;
-      AndroidNotification? android = message.notification?.android;
-
-      if (notification != null && android != null) {
-        flutterLocalNotificationsPlugin.show(
-          notification.hashCode,
-          notification.title,
-          notification.body,
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'channel_id',
-              'Default Channel',
-              importance: Importance.max,
-              priority: Priority.high,
-            ),
-          ),
-        );
-      }
-    });
-
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      print('📬 Notification opened');
-    });
-
-
-    _fetchMeetingsForDay(_selectedDay!);
-
-
-  }
-
-  Future<void> _loadUserMeetings() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    final email = user.email;
-    final ref = FirebaseDatabase.instance.ref().child('calendarEvents');
-    final snapshot = await ref.get();
-
-    if (snapshot.exists) {
-      final data = Map<String, dynamic>.from(snapshot.value as Map);
-      final List<Map<String, String>> loaded = [];
-
-      data.forEach((eventKey, eventData) {
-        if (eventData is Map && eventData.containsKey('hour_0')) {
-          final subVal = eventData['hour_0'];
-
-          if (subVal is Map) {
-            final rawAttendees = subVal['attendees'];
-            final attendees = rawAttendees is List
-                ? List<String>.from(rawAttendees)
-                : rawAttendees is Map
-                    ? List<String>.from(rawAttendees.values)
-                    : <String>[];
-
-            if (attendees.contains(email) && subVal['status'] == 'Accepted') {
-              loaded.add({
-                'title': subVal['title'] ?? '-',
-                'date': subVal['date'] ?? '-',
-                'duration': subVal['duration']?.toString() ?? '-',
-              });
-            }
-          }
-        }
-      });
-
-      if (mounted) {
-        setState(() {
-          userMeetings = loaded;
-        });
-      }
-    }
+    _fetchMeetingsForDay(_selectedDay);
   }
 
   @override
@@ -191,6 +127,7 @@ class _HomePageState extends State<HomePage> {
             icon: Icon(Icons.logout),
             onPressed: () async {
               // Sign out from Firebase
+              await unsubscribeFromAllTopics();
               await FirebaseAuth.instance.signOut();
 
               // Clear SharedPreferences
@@ -310,6 +247,23 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
 
+                ElevatedButton(
+                  onPressed: () async {
+                    try {
+                      UserModel? currentUser = await UserModel.loadFromPrefs();
+                      if (currentUser == null) return;
+                      uid = currentUser.uid;
+                    } catch (e) {
+                      print('Failed to subscribe to topic: $e');
+                    }
+
+           await sendNotificationTopic(
+                        'meeting-5acff35a-bbd4-472b-999e-2e8e538d7a2c', "kata-kata hari ini", "dsasd", "site11");
+
+                  },
+                  child: Text("asdas"),
+                ),
+
           // SizedBox(
           //   height: 130,
           //   child: userMeetings.isEmpty
@@ -417,12 +371,9 @@ class _HomePageState extends State<HomePage> {
           //           },
           //         ),
           // ),
-         
 
-
-
-                   SizedBox(
-                    height: 150,
+          SizedBox(
+            height: 150,
             child: _meetings.isEmpty
                 ? const Center(child: Text('No meetings'))
                 : ListView.builder(
@@ -431,7 +382,22 @@ class _HomePageState extends State<HomePage> {
                       final meeting = _meetings[index];
                       return Card(
                         child: ListTile(
-                          title: Text(meeting.title),
+                          title: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(meeting.title),
+                              // Display the current user's status
+                              if (meeting.userStatus == 'pending')
+                                Text(
+                                  meeting.userStatus ?? 'No Status',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors
+                                        .orange, // Orange color for "pending" status
+                                  ),
+                                ),
+                            ],
+                          ),
                           subtitle: Text(
                             '${DateFormat.jm().format(meeting.startTime)} - ${DateFormat.jm().format(meeting.endTime)}\n'
                             'Location: ${meeting.location}',
@@ -451,9 +417,6 @@ class _HomePageState extends State<HomePage> {
                     },
                   ),
           ),
-         
-         
-        
         ],
       ),
     );

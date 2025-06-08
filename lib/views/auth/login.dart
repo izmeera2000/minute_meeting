@@ -21,46 +21,56 @@ class _LoginPageState extends State<LoginPage> {
   bool _isLoading = false;
 
   // Sign in user
-  Future<void> _signInWithEmailPassword(String email, String password) async {
-    try {
-      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+Future<void> _signInWithEmailPassword(String email, String password) async {
+  try {
+    UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
 
-      final user = userCredential.user;
-      if (user != null) {
-        // Fetch user role from Firestore
-        final userDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get();
+    final user = userCredential.user;
+    if (user != null) {
+      // Get latest FCM token
+      final newFcmToken = await FirebaseMessaging.instance.getToken();
 
-        if (userDoc.exists) {
-          final userData = userDoc.data() as Map<String, dynamic>;
+      // Fetch user role and stored token from Firestore
+      final userDocRef =
+          FirebaseFirestore.instance.collection('users').doc(user.uid);
+      final userDoc = await userDocRef.get();
 
-          final userModel = UserModel(
-            uid: user.uid,
-            name: userData['name'] ?? '', // get name from your user data map
-            email: user.email ?? '',
-            role: userData['role'] ?? '',
-            fcmToken: userData['fcmToken'] ?? '',
-          );
- 
-          await UserModel.saveToPrefs(userModel);
-          // Redirect based on the user's role
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => HomePage()),
-          );
+      if (userDoc.exists) {
+        final userData = userDoc.data() as Map<String, dynamic>;
+
+        // Compare and update FCM token if it's different
+        final oldFcmToken = userData['fcmToken'];
+        if (newFcmToken != null && newFcmToken != oldFcmToken) {
+          await userDocRef.update({'fcmToken': newFcmToken});
+          print('✅ Updated FCM token');
         }
+
+        final userModel = UserModel(
+          uid: user.uid,
+          name: userData['name'] ?? '',
+          email: user.email ?? '',
+          role: userData['role'] ?? '',
+          fcmToken: newFcmToken ?? '',
+        );
+
+        await UserModel.saveToPrefs(userModel);
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => HomePage()),
+        );
       }
-    } on FirebaseAuthException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message ?? 'Authentication failed')),
-      );
     }
+  } on FirebaseAuthException catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(e.message ?? 'Authentication failed')),
+    );
   }
+}
+
 
   // Handle Login
   Future<void> _handleLogin() async {

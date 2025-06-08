@@ -160,17 +160,13 @@ class ButtonCustom extends StatelessWidget {
   }
 }
 
-
-
 class ParticipantChips extends StatelessWidget {
-  final List<String> participants;
-  final Map<String, String> roles;
-  final void Function(String email) onRemove;
+  final List<Map<String, dynamic>> participants;
+  final void Function(Map<String, dynamic> user) onRemove;
 
   const ParticipantChips({
     super.key,
     required this.participants,
-    required this.roles,
     required this.onRemove,
   });
 
@@ -179,8 +175,10 @@ class ParticipantChips extends StatelessWidget {
     return Wrap(
       spacing: 8.0,
       runSpacing: 4.0,
-      children: participants.map((email) {
-        final role = roles[email] ?? 'Attendee';
+      children: participants.map((user) {
+        final email = user['email'] ?? 'Unknown';
+        final role = user['role'] ?? 'Attendee';
+
         return Chip(
           label: Text(
             '$email ($role)',
@@ -194,12 +192,13 @@ class ParticipantChips extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
           ),
           deleteIcon: const Icon(Icons.close, size: 18),
-          onDeleted: () => onRemove(email),
+          onDeleted: () => onRemove(user), // pass the whole user map
         );
       }).toList(),
     );
   }
 }
+
 
 
  
