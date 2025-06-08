@@ -64,7 +64,7 @@ class _FavoriteNotesTabState extends State<FavoriteNotesTab> {
       stream: FirebaseFirestore.instance
           .collection('users')
           .doc(currentUser?.uid) // Replace with your actual user ID
-          .collection('notes')
+          .collection('favourites')
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {

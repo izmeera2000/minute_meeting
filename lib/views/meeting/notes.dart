@@ -44,6 +44,7 @@ class _MeetingNotesKanbanPageState extends State<MeetingNotesKanbanPage> {
       items: [],
     ),
   ];
+
   void _addNoteToGroup(String groupId, String title, String content) async {
     final docRef = FirebaseFirestore.instance
         .collection('meetings')
@@ -115,8 +116,8 @@ class _MeetingNotesKanbanPageState extends State<MeetingNotesKanbanPage> {
     try {
       // Reference to the specific meeting document
       final meetingRef = FirebaseFirestore.instance
-          .collection('meetings') // Collection for users
-          .doc(meetingId); // User ID
+          .collection('meetings') // Collection for meetings
+          .doc(meetingId); // Meeting ID
 
       // Get the meeting document
       final docSnapshot = await meetingRef.get();
@@ -127,8 +128,7 @@ class _MeetingNotesKanbanPageState extends State<MeetingNotesKanbanPage> {
 
         List<Map<String, dynamic>> createdByList = [];
         if (meetingDetails.containsKey('created_by')) {
-          List<dynamic> createdBy = meetingDetails[
-              'created_by']; // This should be a List<Map<String, dynamic>>
+          List<dynamic> createdBy = meetingDetails['created_by'];
 
           // Iterate over the createdBy list and store them as a list of maps
           for (var creator in createdBy) {
@@ -152,7 +152,6 @@ class _MeetingNotesKanbanPageState extends State<MeetingNotesKanbanPage> {
         // Create a note based on the meeting details
         Map<String, dynamic> noteData = {
           'title': title,
-
           'meetingId': meetingId,
           'startTime': startTime,
           'endTime': endTime,
@@ -162,16 +161,25 @@ class _MeetingNotesKanbanPageState extends State<MeetingNotesKanbanPage> {
               .serverTimestamp(), // Automatically set the timestamp when the note is created
         };
 
-        // Reference to the user's notes collection
+        // Reference to the user's favourites collection
         final notesCollection = FirebaseFirestore.instance
             .collection('users') // Collection for users
             .doc(userId) // User ID
-            .collection('notes'); // User's notes collection
+            .collection('favourites'); // User's favourites collection
 
-        // Add the note to the notes collection
-        await notesCollection.add(noteData);
+        // Check if a note with the same meetingId already exists
+        final existingNotesQuery = await notesCollection
+            .where('meetingId',
+                isEqualTo: meetingId) // Check for duplicate meetingId
+            .get();
 
-        print("Note added successfully for meeting $meetingId");
+        if (existingNotesQuery.docs.isEmpty) {
+          // If no existing note found, add the new note
+          await notesCollection.add(noteData);
+          print("Note added successfully for meeting $meetingId");
+        } else {
+          print("Note for meeting $meetingId already exists.");
+        }
       } else {
         print("No such meeting exists.");
       }
@@ -237,13 +245,12 @@ class _MeetingNotesKanbanPageState extends State<MeetingNotesKanbanPage> {
   Future<void> exportNotesToFirestore({
     required String meetingId,
   }) async {
+    // Reference to the notes collection in the meeting
     final notesCollection = FirebaseFirestore.instance
         .collection('meetings')
         .doc(meetingId)
         .collection('notes'); // Collection of notes in the meeting
 
-    final newNotesCollection = FirebaseFirestore.instance
-        .collection('notes'); // New collection where notes will be saved
     final batch = FirebaseFirestore.instance.batch();
 
     try {
@@ -260,17 +267,24 @@ class _MeetingNotesKanbanPageState extends State<MeetingNotesKanbanPage> {
         final data = doc.data();
         final noteId = doc.id;
 
-        // Assuming you are passing `user_uid` via context or FirebaseAuth
+        // Assuming you are passing `currentUser!.uid` dynamically
+        final userId = currentUser!.uid; // Current user's UID
 
-        // Adding `user_uid` to the existing note data
+        // Create a reference to the user's notes collection (users/{uid}/notes)
+        final userNotesCollection = FirebaseFirestore.instance
+            .collection('users') // Collection for users
+            .doc(userId) // User's UID document
+            .collection('notes'); // User's notes subcollection
+
+        // Add user UID and any other necessary fields to the note data
         final updatedData = {
           ...data,
-          'user_uid': currentUser!.uid, // Add user UID
+          'user_uid': userId, // Add user UID to the note data
         };
 
-        // Create a new document reference in the 'notes' collection
+        // Create a new document reference in the user's notes subcollection
         final newNoteDocRef =
-            newNotesCollection.doc(); // This will generate a new document ID
+            userNotesCollection.doc(); // Auto-generated doc ID
 
         // Add the updated note to the batch
         batch.set(newNoteDocRef, updatedData); // Add the note to the batch
@@ -279,7 +293,7 @@ class _MeetingNotesKanbanPageState extends State<MeetingNotesKanbanPage> {
       // Commit the batch
       await batch.commit();
       print(
-          'Notes successfully exported to the "notes" collection in Firestore.');
+          'Notes successfully exported to the "users/{uid}/notes" collection.');
     } catch (e) {
       print("Error exporting notes: $e");
     }
