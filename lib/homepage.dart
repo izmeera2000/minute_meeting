@@ -22,8 +22,8 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final List<Map<String, dynamic>> menuItems = [
     {'title': 'Meetings', 'icon': Icons.book, 'route': '/meeting/list'},
-    {'title': 'Minute Meeting', 'icon': Icons.note_alt, 'route': '/minute'},
-    {'title': 'Calendar', 'icon': Icons.calendar_today, 'route': '/calendar'},
+    {'title': 'Minute Meeting', 'icon': Icons.note_alt, 'route': '/minutemeeting'},
+    // {'title': 'Calendar', 'icon': Icons.calendar_today, 'route': '/calendar'},
     {'title': 'Setting', 'icon': Icons.settings, 'route': '/settings'},
   ];
 
@@ -247,22 +247,22 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
 
-                ElevatedButton(
-                  onPressed: () async {
-                    try {
-                      UserModel? currentUser = await UserModel.loadFromPrefs();
-                      if (currentUser == null) return;
-                      uid = currentUser.uid;
-                    } catch (e) {
-                      print('Failed to subscribe to topic: $e');
-                    }
+          //       ElevatedButton(
+          //         onPressed: () async {
+          //           try {
+          //             UserModel? currentUser = await UserModel.loadFromPrefs();
+          //             if (currentUser == null) return;
+          //             uid = currentUser.uid;
+          //           } catch (e) {
+          //             print('Failed to subscribe to topic: $e');
+          //           }
 
-           await sendNotificationTopic(
-                        'meeting-5acff35a-bbd4-472b-999e-2e8e538d7a2c', "kata-kata hari ini", "dsasd", "site11");
+          //  await sendNotificationTopic(
+          //               'meeting-5acff35a-bbd4-472b-999e-2e8e538d7a2c', "kata-kata hari ini", "dsasd", "site11");
 
-                  },
-                  child: Text("asdas"),
-                ),
+          //         },
+          //         child: Text("asdas"),
+          //       ),
 
           // SizedBox(
           //   height: 130,

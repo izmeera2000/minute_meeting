@@ -19,7 +19,9 @@ import 'package:minute_meeting/views/auth/login.dart';
 import 'package:minute_meeting/views/auth/register.dart';
 import 'package:minute_meeting/views/meeting/create.dart';
 import 'package:minute_meeting/views/meeting/list.dart';
+import 'package:minute_meeting/views/minute/top.dart';
 import 'package:minute_meeting/views/settings/seed.dart';
+import 'package:minute_meeting/views/settings/seedmanagepage.dart';
 import 'package:minute_meeting/views/settings/settings_list.dart';
 
 void main() async {
@@ -220,6 +222,7 @@ class _MyAppState extends State<MyApp> {
         '/manageroom': (context) => RoomManagementPage(),
         '/manageuser': (context) => UserManagementPage(),
         '/managemeeting': (context) => EventManagementPage(),
+        '/minutemeeting': (context) => TwoTabsPage(),
         '/login': (context) => LoginPage(),
         '/settings': (context) => SettingsPage(),
       },

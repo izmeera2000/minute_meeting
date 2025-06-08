@@ -31,23 +31,26 @@ users can upload wait approval by  init booking / setiausaha %%
 
 
 note able to import / export or even save as favourite
-notification push  notification 
 
 
 
-user %% profile %%
+%% notification push  notification  %%
+
+
+
+%% user  profile  %%
 
 
 %% 
 role based user on every meeting
 (only su can create meeting , admin can only upload without approval , ) %%
-
-in meeting compare time with start and end
+%% 
+in meeting compare time with start and end %%
 %% 
 {bilik meeting manage
 user manage}
  %%
-tied to user  uniuque key like seed
+%% tied to user  uniuque key like seed %%
 
 
 %% roles(admin,member)   %%
