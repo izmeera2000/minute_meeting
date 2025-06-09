@@ -30,7 +30,7 @@ users can upload wait approval by  init booking / setiausaha %%
  %%
 
 
-note able to import / export or even save as favourite
+%% note able to import / export or even save as  favourite  %%
 
 
 
