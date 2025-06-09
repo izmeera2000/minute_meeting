@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:minute_meeting/models/user.dart';
 import 'package:minute_meeting/views/meeting/notes.dart';
+import 'package:minute_meeting/views/meeting/notes2.dart';
 
 class TwoTabsPage extends StatelessWidget {
   const TwoTabsPage({super.key});
@@ -17,15 +18,24 @@ class TwoTabsPage extends StatelessWidget {
           title: const Text('My Minute Meetings'),
           bottom: const TabBar(
             tabs: [
-              Tab(icon: Icon(Icons.favorite ,color: Colors.white,)),
-              Tab(icon: Icon(Icons.list ,color: Colors.white,),  ),
+              Tab(
+                  icon: Icon(
+                Icons.favorite,
+                color: Colors.white,
+              )),
+              Tab(
+                icon: Icon(
+                  Icons.list,
+                  color: Colors.white,
+                ),
+              ),
             ],
           ),
         ),
         body: const TabBarView(
           children: [
             FavoriteNotesTab(),
-            Center(child: Text('Content for Tab 2')),
+            PersonalNotesTab(),
           ],
         ),
       ),
@@ -129,6 +139,110 @@ class _FavoriteNotesTabState extends State<FavoriteNotesTab> {
                           color: Colors.black.withOpacity(0.7),
                         ),
                       ),
+                      const SizedBox(height: 8.0),
+                      Text(
+                        'Saved on: ${timestamp.toLocal()}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class PersonalNotesTab extends StatefulWidget {
+  const PersonalNotesTab();
+
+  @override
+  State<PersonalNotesTab> createState() => _PersonalNotesTabState();
+}
+
+class _PersonalNotesTabState extends State<PersonalNotesTab> {
+  UserModel? currentUser;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserFromPrefs();
+  }
+
+  Future<void> _loadUserFromPrefs() async {
+    final user = await UserModel.loadFromPrefs();
+    if (user == null) return;
+
+    setState(() {
+      currentUser = user;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser?.uid) // Replace with your actual user ID
+          .collection('notes')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(child: Text('No favorite notes available.'));
+        }
+
+        final notes = snapshot.data!.docs;
+
+        return ListView.builder(
+          itemCount: notes.length,
+          itemBuilder: (context, index) {
+            final note = notes[index];
+            final title = note.id;
+            final noteId = note.id; // Get the document ID (uid for the note)
+
+            final timestamp = (note['timestamp'] as Timestamp).toDate();
+
+            return Card(
+              margin:
+                  const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 4.0,
+              child: InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => MeetingNotesKanbanPage2(
+                        noteID: noteId, // Correctly passing the note ID here
+                      ),
+                    ),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8.0),
                       const SizedBox(height: 8.0),
                       Text(
                         'Saved on: ${timestamp.toLocal()}',

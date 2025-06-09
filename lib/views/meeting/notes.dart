@@ -242,62 +242,78 @@ class _MeetingNotesKanbanPageState extends State<MeetingNotesKanbanPage> {
     });
   }
 
-  Future<void> exportNotesToFirestore({
-    required String meetingId,
-  }) async {
-    // Reference to the notes collection in the meeting
-    final notesCollection = FirebaseFirestore.instance
-        .collection('meetings')
-        .doc(meetingId)
-        .collection('notes'); // Collection of notes in the meeting
+Future<void> exportNotesToFirestore({
+  required String meetingId,
+}) async {
+  final notesCollection = FirebaseFirestore.instance
+      .collection('meetings')
+      .doc(meetingId)
+      .collection('notes');
 
-    final batch = FirebaseFirestore.instance.batch();
+  final batch = FirebaseFirestore.instance.batch();
 
-    try {
-      // Fetch all existing notes for the meeting
-      final snapshot = await notesCollection.get();
+  try {
+    final snapshot = await notesCollection.get();
 
-      if (snapshot.docs.isEmpty) {
-        print('No notes found for this meeting.');
-        return;
-      }
-
-      // Iterate over each note and add it to the batch with a new user_uid
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final noteId = doc.id;
-
-        // Assuming you are passing `currentUser!.uid` dynamically
-        final userId = currentUser!.uid; // Current user's UID
-
-        // Create a reference to the user's notes collection (users/{uid}/notes)
-        final userNotesCollection = FirebaseFirestore.instance
-            .collection('users') // Collection for users
-            .doc(userId) // User's UID document
-            .collection('notes'); // User's notes subcollection
-
-        // Add user UID and any other necessary fields to the note data
-        final updatedData = {
-          ...data,
-          'user_uid': userId, // Add user UID to the note data
-        };
-
-        // Create a new document reference in the user's notes subcollection
-        final newNoteDocRef =
-            userNotesCollection.doc(); // Auto-generated doc ID
-
-        // Add the updated note to the batch
-        batch.set(newNoteDocRef, updatedData); // Add the note to the batch
-      }
-
-      // Commit the batch
-      await batch.commit();
-      print(
-          'Notes successfully exported to the "users/{uid}/notes" collection.');
-    } catch (e) {
-      print("Error exporting notes: $e");
+    if (snapshot.docs.isEmpty) {
+      print('❌ No notes found for this meeting.');
+      return;
     }
+
+    final userId = currentUser!.uid;
+
+    // ✅ Create a new note doc under users/{uid}/notes
+    final newNoteRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('notes')
+        .doc();
+
+    final generatedNoteId = newNoteRef.id;
+
+    // ✅ Add metadata for the main exported note
+    final noteMetaData = {
+      'user_uid': userId,
+      'source_meeting_id': meetingId,
+      'exported_note_id': generatedNoteId,
+      'timestamp': FieldValue.serverTimestamp(),
+    };
+
+    batch.set(newNoteRef, noteMetaData);
+
+    // ✅ Subnotes collection under this note
+    final subnotesCollection = newNoteRef.collection('subnotes');
+
+    // ✅ Loop over all meeting notes
+    for (var doc in snapshot.docs) {
+      final noteData = doc.data();
+
+      // Structure of each meeting note
+      final subnoteData = {
+        'title': noteData['title'],
+        'content': noteData['content'],
+        'group': noteData['group'],
+        'author': noteData['author'],
+        'original_note_id': noteData['id'] ?? doc.id,
+        'timestamp': noteData['timestamp'],
+        'exported_at': FieldValue.serverTimestamp(),
+        'user_uid': userId,
+      };
+
+      final newSubnoteRef = subnotesCollection.doc();
+      batch.set(newSubnoteRef, subnoteData);
+    }
+
+    // ✅ Commit the batch
+    await batch.commit();
+    print(
+        '✅ All meeting notes exported as subnotes to users/$userId/notes/$generatedNoteId/subnotes.');
+  } catch (e) {
+    print("❌ Error exporting notes: $e");
   }
+}
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -480,6 +496,7 @@ class _MeetingNotesKanbanPageState extends State<MeetingNotesKanbanPage> {
                       },
                     );
                   },
+                 
                   child: ListTile(
                     contentPadding: const EdgeInsets.all(
                         20), // Increased padding for a more spacious feel

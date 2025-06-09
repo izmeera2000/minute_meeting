@@ -10,10 +10,12 @@ import 'package:minute_meeting/views/meeting/note_details.dart';
 class MeetingNotesKanbanPage2 extends StatefulWidget {
   final String noteID;
 
-  const MeetingNotesKanbanPage2({required this.noteID});
+  const MeetingNotesKanbanPage2({Key? key, required this.noteID})
+      : super(key: key);
 
   @override
-  _MeetingNotesKanbanPage2State createState() => _MeetingNotesKanbanPage2State();
+  _MeetingNotesKanbanPage2State createState() =>
+      _MeetingNotesKanbanPage2State();
 }
 
 class _MeetingNotesKanbanPage2State extends State<MeetingNotesKanbanPage2> {
@@ -25,6 +27,7 @@ class _MeetingNotesKanbanPage2State extends State<MeetingNotesKanbanPage2> {
   void initState() {
     super.initState();
     _loadUserFromPrefs();
+    print(widget.noteID);
   }
 
   List<KanbanBoardGroup<String, MeetingNote>> groups = [
@@ -48,8 +51,10 @@ class _MeetingNotesKanbanPage2State extends State<MeetingNotesKanbanPage2> {
   void _addNoteToGroup(String groupId, String title, String content) async {
     final docRef = FirebaseFirestore.instance
         .collection('users')
-        .doc(widget.noteID)
+        .doc(currentUser?.uid)
         .collection('notes')
+        .doc(widget.noteID) // <-- Firestore generates a unique ID
+        .collection('subnotes')
         .doc(); // <-- Firestore generates a unique ID
 
     final author = Author(name: currentUser!.name, uid: currentUser!.uid);
@@ -67,13 +72,15 @@ class _MeetingNotesKanbanPage2State extends State<MeetingNotesKanbanPage2> {
   }
 
   Future<void> updateNoteInFirestore(
-      MeetingNote updatedNote, String meetingID) async {
+      MeetingNote updatedNote, String noteID) async {
     try {
       // Get the reference to the Firestore collection and the specific document
       final noteRef = FirebaseFirestore.instance
-          .collection('meetings') // Collection for meetings
-          .doc(meetingID) // Specific meeting ID
+          .collection('users') // Collection for meetings
+          .doc(currentUser!.uid) // Specific meeting ID
           .collection('notes') // Collection for notes under this meeting
+          .doc(noteID) // The note document ID
+          .collection('subnotes') // Collection for notes under this meeting
           .doc(updatedNote.id); // The note document ID
       // Update the note data in Firestore
       await noteRef.update({
@@ -92,14 +99,16 @@ class _MeetingNotesKanbanPage2State extends State<MeetingNotesKanbanPage2> {
     }
   }
 
-  Future<void> deleteNoteFromFirestore(String noteId, String meetingUid) async {
+  Future<void> deleteNoteFromFirestore(String noteId) async {
     try {
       // Get the reference to the Firestore document for the specific note
       final noteRef = FirebaseFirestore.instance
-          .collection('meetings') // Collection for meetings
-          .doc(meetingUid) // Specific meeting ID
-          .collection('notes') // Collection for notes under this meeting
-          .doc(noteId); // The note document ID
+          .collection('users')
+          .doc(currentUser?.uid)
+          .collection('notes')
+          .doc(widget.noteID) // <-- Firestore generates a unique ID
+          .collection('subnotes')
+          .doc(noteId); // <-- Firestore generates a unique ID
 
       // Delete the note from Firestore
       await noteRef.delete();
@@ -108,84 +117,6 @@ class _MeetingNotesKanbanPage2State extends State<MeetingNotesKanbanPage2> {
     } catch (e) {
       // Handle errors, such as if the note or meeting doesn't exist
       print("Error deleting note: $e");
-    }
-  }
-
-  Future<void> getMeetingDetailsAndSaveAsNote(
-      String userId, String meetingId) async {
-    try {
-      // Reference to the specific meeting document
-      final meetingRef = FirebaseFirestore.instance
-          .collection('meetings') // Collection for meetings
-          .doc(meetingId); // Meeting ID
-
-      // Get the meeting document
-      final docSnapshot = await meetingRef.get();
-
-      if (docSnapshot.exists) {
-        // If the document exists, extract the data
-        final meetingDetails = docSnapshot.data() as Map<String, dynamic>;
-
-        List<Map<String, dynamic>> createdByList = [];
-        if (meetingDetails.containsKey('created_by')) {
-          List<dynamic> createdBy = meetingDetails['created_by'];
-
-          // Iterate over the createdBy list and store them as a list of maps
-          for (var creator in createdBy) {
-            if (creator is Map<String, dynamic>) {
-              createdByList.add({
-                'email': creator['email'],
-                'name': creator['name'],
-                'uid': creator['uid'],
-              });
-            }
-          }
-        }
-
-        // Extract individual meeting details
-        String title = meetingDetails['title'];
-        Timestamp date = meetingDetails['date'];
-        String location = meetingDetails['location'];
-        Timestamp startTime = meetingDetails['startTime'];
-        Timestamp endTime = meetingDetails['endTime'];
-
-        // Create a note based on the meeting details
-        Map<String, dynamic> noteData = {
-          'title': title,
-          'meetingId': meetingId,
-          'startTime': startTime,
-          'endTime': endTime,
-          'createdBy': createdByList, // Store the list of creators
-          'status': meetingDetails['status'],
-          'timestamp': FieldValue
-              .serverTimestamp(), // Automatically set the timestamp when the note is created
-        };
-
-        // Reference to the user's favourites collection
-        final notesCollection = FirebaseFirestore.instance
-            .collection('users') // Collection for users
-            .doc(userId) // User ID
-            .collection('favourites'); // User's favourites collection
-
-        // Check if a note with the same meetingId already exists
-        final existingNotesQuery = await notesCollection
-            .where('meetingId',
-                isEqualTo: meetingId) // Check for duplicate meetingId
-            .get();
-
-        if (existingNotesQuery.docs.isEmpty) {
-          // If no existing note found, add the new note
-          await notesCollection.add(noteData);
-          print("Note added successfully for meeting $meetingId");
-        } else {
-          print("Note for meeting $meetingId already exists.");
-        }
-      } else {
-        print("No such meeting exists.");
-      }
-    } catch (e) {
-      // Handle errors
-      print("Error fetching meeting details or saving note: $e");
     }
   }
 
@@ -242,149 +173,70 @@ class _MeetingNotesKanbanPage2State extends State<MeetingNotesKanbanPage2> {
     });
   }
 
-  Future<void> exportNotesToFirestore({
-    required String meetingId,
-  }) async {
-    // Reference to the notes collection in the meeting
-    final notesCollection = FirebaseFirestore.instance
-        .collection('meetings')
-        .doc(meetingId)
-        .collection('notes'); // Collection of notes in the meeting
-
-    final batch = FirebaseFirestore.instance.batch();
-
-    try {
-      // Fetch all existing notes for the meeting
-      final snapshot = await notesCollection.get();
-
-      if (snapshot.docs.isEmpty) {
-        print('No notes found for this meeting.');
-        return;
-      }
-
-      // Iterate over each note and add it to the batch with a new user_uid
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final noteId = doc.id;
-
-        // Assuming you are passing `currentUser!.uid` dynamically
-        final userId = currentUser!.uid; // Current user's UID
-
-        // Create a reference to the user's notes collection (users/{uid}/notes)
-        final userNotesCollection = FirebaseFirestore.instance
-            .collection('users') // Collection for users
-            .doc(userId) // User's UID document
-            .collection('notes'); // User's notes subcollection
-
-        // Add user UID and any other necessary fields to the note data
-        final updatedData = {
-          ...data,
-          'user_uid': userId, // Add user UID to the note data
-        };
-
-        // Create a new document reference in the user's notes subcollection
-        final newNoteDocRef =
-            userNotesCollection.doc(); // Auto-generated doc ID
-
-        // Add the updated note to the batch
-        batch.set(newNoteDocRef, updatedData); // Add the note to the batch
-      }
-
-      // Commit the batch
-      await batch.commit();
-      print(
-          'Notes successfully exported to the "users/{uid}/notes" collection.');
-    } catch (e) {
-      print("Error exporting notes: $e");
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    final userId = currentUser?.uid;
+
+    if (userId == null) {
+      return Center(child: Text('User not logged in'));
+    }
+
+    final subnotesCollection = FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('notes')
+        .doc(widget.noteID)
+        .collection('subnotes');
+
     return Scaffold(
       appBar: AppBar(
         title: Text('Notes'),
         backgroundColor: Colors.red,
         foregroundColor: Colors.white,
-        actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_horiz),
-            tooltip: 'More options',
-            onSelected: (value) async {
-              if (value == 'favourite') {
-                // Handle Set as Favourite
-                // _setAsFavourite();
-                await getMeetingDetailsAndSaveAsNote(
-                    currentUser!.uid, widget.meetingId);
-              } else if (value == 'export') {
-                // Handle Export Note
-                final List<Note> notesToExport = [
-                  // Populate this list with notes from the Kanban board
-                  // You should gather all notes from the groups or wherever you store them
-                ];
-
-                // Call the export function
-                exportNotesToFirestore(
-                  meetingId: widget.meetingId,
-                );
-              }
-            },
-            itemBuilder: (BuildContext context) => [
-              PopupMenuItem<String>(
-                value: 'favourite',
-                child: Text('Favourite'),
-              ),
-              PopupMenuItem<String>(
-                value: 'export',
-                child: Text('Export Note'),
-              ),
-            ],
-          ),
-        ],
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('meetings')
-            .doc(widget.meetingId)
-            .collection('notes')
-            .orderBy('timestamp')
+        stream: subnotesCollection
+            .orderBy('timestamp', descending: false)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Center(child: CircularProgressIndicator());
           }
+
           if (snapshot.hasError) {
             return Center(child: Text('Error: ${snapshot.error}'));
           }
 
-          final ideas = <MeetingNote>[];
-          final discussed = <MeetingNote>[];
-          final actionItems = <MeetingNote>[];
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return Center(child: Text('No notes found.'));
+          }
 
-          for (var doc in snapshot.data!.docs) {
-            final data = doc.data() as Map<String, dynamic>;
+          // Parse documents into MeetingNote objects
+          final allSubnotes = snapshot.data!.docs.map((doc) {
+            final data = doc.data()! as Map<String, dynamic>;
 
-            // Get author data and map it to the Author object
-            final authorData = data['author'] as Map<String, dynamic>;
+            final authorData = data['author'] as Map<String, dynamic>? ?? {};
             final author = Author.fromMap(authorData);
 
-            final note = MeetingNote(
-              id: data['id'],
-              title: data['title'],
-              content: data['content'],
-              timestamp: (data['timestamp'] as Timestamp).toDate(),
-              author: author, // Use the Author object here
-              group: data['group'],
+            return MeetingNote(
+              id: doc.id,
+              title: data['title'] ?? '',
+              content: data['content'] ?? '',
+              timestamp:
+                  (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
+              author: author,
+              group: data['group'] ?? 'ideas',
             );
-            final status = data['group'];
-            if (status == 'ideas') {
-              ideas.add(note);
-            } else if (status == 'discussed') {
-              discussed.add(note);
-            } else if (status == 'action_items') {
-              actionItems.add(note);
-            }
-          }
+          }).toList();
+
+          // Group subnotes by group
+          final ideas =
+              allSubnotes.where((note) => note.group == 'ideas').toList();
+          final discussed =
+              allSubnotes.where((note) => note.group == 'discussed').toList();
+          final actionItems = allSubnotes
+              .where((note) => note.group == 'action_items')
+              .toList();
 
           final groups = [
             KanbanBoardGroup(id: 'ideas', name: 'Ideas', items: ideas),
@@ -401,13 +253,10 @@ class _MeetingNotesKanbanPage2State extends State<MeetingNotesKanbanPage2> {
                 (oldCardIndex, newCardIndex, oldListIndex, newListIndex) async {
               final movedNote = groups[oldListIndex!].items[oldCardIndex!];
 
-              // Firestore update
-              await FirebaseFirestore.instance
-                  .collection('meetings')
-                  .doc(widget.meetingId)
-                  .collection('notes')
-                  .doc(movedNote.id)
-                  .update({'status': groups[newListIndex!].id});
+              // Update the group field in Firestore for the moved note
+              await subnotesCollection.doc(movedNote.id).update({
+                'group': groups[newListIndex!].id,
+              });
             },
             groupConstraints: BoxConstraints(maxWidth: 250),
             groupHeaderBuilder: (context, groupId) {
@@ -440,84 +289,64 @@ class _MeetingNotesKanbanPage2State extends State<MeetingNotesKanbanPage2> {
                   groups.firstWhere((g) => g.id == groupId).items[itemIndex];
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                elevation:
-                    6, // Slightly increased elevation for a more pronounced shadow
+                elevation: 6,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(
-                      16), // More rounded corners for a softer look
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(
-                      16), // Ensure the ripple effect is rounded
+                  borderRadius: BorderRadius.circular(16),
                   onTap: () {
                     showDialog(
                       context: context,
-                      barrierDismissible:
-                          true, // Allow dismiss by tapping outside
-                      builder: (BuildContext context) {
-                        return MeetingNoteDetailsPage(
-                          note: note, // Pass the note here
-                          onDelete: () async {
-                            // Handle delete action here
-                            // For example, call a method to delete this note from your data source
-                            await deleteNoteFromFirestore(
-                                note.id, widget.meetingId);
-                            print("Note deleted: ${note.id}");
-                            Navigator.pop(
-                                context); // Close the dialog after deletion
-                          },
-                          onEdit: (updatedNote) async {
-                            // Handle the edited note here
-                            // For example, update the note in your data source
-                            await updateNoteInFirestore(
-                                updatedNote, widget.meetingId);
+                      barrierDismissible: true,
+                      builder: (context) => MeetingNoteDetailsPage(
+                        note: note,
+                        onDelete: () async {
+                          // Delete the subnote document
+                          await deleteNoteFromFirestore(note.id);
+                          Navigator.pop(context);
+                        },
+                        onEdit: (updatedNote) async {
+                          // Update the subnote document fields
 
-                            print("Note updated: ${updatedNote.title}");
-                            Navigator.pop(
-                                context); // Close the dialog after saving the changes
-                          },
-                        );
-                      },
+                          await updateNoteInFirestore(
+                              updatedNote, widget.noteID);
+
+                          Navigator.pop(context);
+                        },
+                      ),
                     );
                   },
                   child: ListTile(
-                    contentPadding: const EdgeInsets.all(
-                        20), // Increased padding for a more spacious feel
+                    contentPadding: const EdgeInsets.all(20),
                     title: Text(
                       note.title,
                       style: TextStyle(
-                        fontSize: 18, // Slightly larger font size for the title
-                        fontWeight: FontWeight
-                            .w600, // Use a semi-bold weight for better emphasis
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
                         color: Colors.black87,
                       ),
                     ),
                     subtitle: Padding(
-                      padding: const EdgeInsets.only(
-                          top: 10.0), // Spacing between title and subtitle
+                      padding: const EdgeInsets.only(top: 10.0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             'By ${note.author.name} • ${_formatTimestamp(note.timestamp)}',
                             style: TextStyle(
-                              fontSize:
-                                  14, // Increased font size for better readability
+                              fontSize: 14,
                               color: Colors.grey[600],
                             ),
                           ),
-                          const SizedBox(
-                              height:
-                                  10), // Increased height for better spacing
+                          const SizedBox(height: 10),
                           Text(
                             note.content,
                             style: TextStyle(
-                              fontSize:
-                                  15, // Slightly larger font size for content
-                              color: Colors.black.withOpacity(
-                                  0.8), // More opaque text for better visibility
+                              fontSize: 15,
+                              color: Colors.black.withOpacity(0.8),
                             ),
-                            maxLines: 3, // Allow more lines for content
+                            maxLines: 3,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
