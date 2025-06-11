@@ -39,10 +39,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.red.shade100,
-      appBar: AppBar(
-        title: const Text('Reset Password'),
-        backgroundColor: Colors.red,
-      ),
+ 
       body: Center(
         child: Container(
           margin: const EdgeInsets.all(16),
