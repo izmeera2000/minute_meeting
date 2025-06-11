@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:minute_meeting/homepage.dart';
 import 'package:minute_meeting/models/user.dart';
 import 'package:minute_meeting/views/auth/register.dart';
+import 'package:minute_meeting/views/auth/reset_password.dart';
 
 final FirebaseAuth _auth = FirebaseAuth.instance;
 
@@ -21,56 +22,55 @@ class _LoginPageState extends State<LoginPage> {
   bool _isLoading = false;
 
   // Sign in user
-Future<void> _signInWithEmailPassword(String email, String password) async {
-  try {
-    UserCredential userCredential = await _auth.signInWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
+  Future<void> _signInWithEmailPassword(String email, String password) async {
+    try {
+      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
 
-    final user = userCredential.user;
-    if (user != null) {
-      // Get latest FCM token
-      final newFcmToken = await FirebaseMessaging.instance.getToken();
+      final user = userCredential.user;
+      if (user != null) {
+        // Get latest FCM token
+        final newFcmToken = await FirebaseMessaging.instance.getToken();
 
-      // Fetch user role and stored token from Firestore
-      final userDocRef =
-          FirebaseFirestore.instance.collection('users').doc(user.uid);
-      final userDoc = await userDocRef.get();
+        // Fetch user role and stored token from Firestore
+        final userDocRef =
+            FirebaseFirestore.instance.collection('users').doc(user.uid);
+        final userDoc = await userDocRef.get();
 
-      if (userDoc.exists) {
-        final userData = userDoc.data() as Map<String, dynamic>;
+        if (userDoc.exists) {
+          final userData = userDoc.data() as Map<String, dynamic>;
 
-        // Compare and update FCM token if it's different
-        final oldFcmToken = userData['fcmToken'];
-        if (newFcmToken != null && newFcmToken != oldFcmToken) {
-          await userDocRef.update({'fcmToken': newFcmToken});
-          print('✅ Updated FCM token');
+          // Compare and update FCM token if it's different
+          final oldFcmToken = userData['fcmToken'];
+          if (newFcmToken != null && newFcmToken != oldFcmToken) {
+            await userDocRef.update({'fcmToken': newFcmToken});
+            print('✅ Updated FCM token');
+          }
+
+          final userModel = UserModel(
+            uid: user.uid,
+            name: userData['name'] ?? '',
+            email: user.email ?? '',
+            role: userData['role'] ?? '',
+            fcmToken: newFcmToken ?? '',
+          );
+
+          await UserModel.saveToPrefs(userModel);
+
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => HomePage()),
+          );
         }
-
-        final userModel = UserModel(
-          uid: user.uid,
-          name: userData['name'] ?? '',
-          email: user.email ?? '',
-          role: userData['role'] ?? '',
-          fcmToken: newFcmToken ?? '',
-        );
-
-        await UserModel.saveToPrefs(userModel);
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => HomePage()),
-        );
       }
+    } on FirebaseAuthException catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message ?? 'Authentication failed')),
+      );
     }
-  } on FirebaseAuthException catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(e.message ?? 'Authentication failed')),
-    );
   }
-}
-
 
   // Handle Login
   Future<void> _handleLogin() async {
@@ -188,6 +188,16 @@ Future<void> _signInWithEmailPassword(String email, String password) async {
                   );
                 },
                 child: Text("Don't have an account? Sign up"),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) =>  ResetPasswordPage()),
+                  );
+                },
+                child: const Text("Forgot password?"),
               ),
             ],
           ),
