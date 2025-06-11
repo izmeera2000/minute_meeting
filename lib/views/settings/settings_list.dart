@@ -28,16 +28,16 @@ foregroundColor: Colors.white,
             },
           ),
 
-                    ListTile(
-            leading: Icon(Icons.group),
-            title: Text('Group'),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => ManageSeed()),
-              );
-            },
-          ),
+          //           ListTile(
+          //   leading: Icon(Icons.group),
+          //   title: Text('Group'),
+          //   onTap: () {
+          //     Navigator.push(
+          //       context,
+          //       MaterialPageRoute(builder: (context) => ManageSeed()),
+          //     );
+          //   },
+          // ),
           // ListTile(
           //   leading: Icon(Icons.room),
           //   title: Text('Rooms'),

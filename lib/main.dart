@@ -163,6 +163,9 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
+
+
+
   void _handleMessageNavigation(Map<String, dynamic> data) {
     final context = navigatorKey.currentContext;
     if (context == null) return;
@@ -178,6 +181,9 @@ class _MyAppState extends State<MyApp> {
       );
     }
   }
+
+
+
 
   @override
   Widget build(BuildContext context) {
