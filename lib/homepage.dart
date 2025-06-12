@@ -22,9 +22,13 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final List<Map<String, dynamic>> menuItems = [
     {'title': 'Meetings', 'icon': Icons.book, 'route': '/meeting/list'},
-    {'title': 'Minute Meeting', 'icon': Icons.note_alt, 'route': '/minutemeeting'},
-    {'title': 'Manage Group', 'icon': Icons.group, 'route': '/ManageSeed'},
-    {'title': 'Setting', 'icon': Icons.settings, 'route': '/settings'},
+    {
+      'title': 'Minute Meeting',
+      'icon': Icons.note_alt,
+      'route': '/minutemeeting'
+    },
+    {'title': 'Manage Group', 'icon': Icons.group, 'route': '/managegroup'},
+    {'title': 'Settings', 'icon': Icons.settings, 'route': '/settings'},
   ];
 
   List<Map<String, String>> userMeetings = [];
@@ -94,7 +98,7 @@ class _HomePageState extends State<HomePage> {
           })
           .where((meeting) =>
               acceptedSeedIds.contains(meeting.seed) &&
-              meeting.participants.any((p) => p.email == currentUser.email ))
+              meeting.participants.any((p) => p.email == currentUser.email))
           .toList();
 
       setState(() {
@@ -126,16 +130,22 @@ class _HomePageState extends State<HomePage> {
           IconButton(
             icon: Icon(Icons.logout),
             onPressed: () async {
-              // Sign out from Firebase
-              await unsubscribeFromAllTopics();
-              await FirebaseAuth.instance.signOut();
+// Sign out from Firebase and clear SharedPreferences concurrently
+              try {
+                // Run unsubscribe, sign-out, and clear SharedPreferences in parallel
+                await Future.wait([
+                  unsubscribeFromAllTopics(),
+                  FirebaseAuth.instance.signOut(),
+                  SharedPreferences.getInstance()
+                      .then((prefs) => prefs.clear()),
+                ]);
 
-              // Clear SharedPreferences
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.clear();
-
-              // Navigate to login screen and replace current route
-              Navigator.pushReplacementNamed(context, '/login');
+                // Navigate to login screen and replace current route
+                Navigator.pushReplacementNamed(context, '/login');
+              } catch (e) {
+                // Handle any errors that might occur during sign-out or clearing preferences
+                print("Error during sign-out process: $e");
+              }
             },
           )
         ],
