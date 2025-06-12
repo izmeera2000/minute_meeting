@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:minute_meeting/config/notification.dart';
 
 class EventManagementPage extends StatefulWidget {
   @override
@@ -119,6 +120,12 @@ class _EventManagementPageState extends State<EventManagementPage> {
                 body:
                 "Invited meeting on $formattedDateTime for ${hour0['duration']}.",
               );
+              String botToken =
+                  '7833413502:AAFDP4OLzJIZuJU_Rm2a5ueaNtTSXHsf-I0'; // Replace with your Bot Token
+              String groupChatId = '-4798645160'; // Replace with your Chat ID
+              String message = 'Invited meeting on $formattedDateTime for ${hour0['duration']}.';
+              await sendTelegramGroupMessage(botToken, groupChatId, message);
+
             } else {
               print("⚠️ No FCM token found for $email");
             }

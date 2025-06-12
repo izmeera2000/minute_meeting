@@ -60,6 +60,7 @@ dependencies:
   kanban_board: ^1.0.0+2
   appflowy_board: ^0.1.2
   sidebarx: ^0.17.1
+  rename_app: ^1.6.3
 
 dev_dependencies:
   flutter_test:

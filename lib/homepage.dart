@@ -11,6 +11,7 @@ import 'package:minute_meeting/models/user.dart';
 import 'package:minute_meeting/views/meeting/details.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'main.dart'; // for flutterLocalNotificationsPlugin
+import 'package:http/http.dart' as http;
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -257,22 +258,19 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
 
-          //       ElevatedButton(
-          //         onPressed: () async {
-          //           try {
-          //             UserModel? currentUser = await UserModel.loadFromPrefs();
-          //             if (currentUser == null) return;
-          //             uid = currentUser.uid;
-          //           } catch (e) {
-          //             print('Failed to subscribe to topic: $e');
-          //           }
+          // ElevatedButton(
+          //   onPressed: () async {
+          //     // try {
+          //     //   UserModel? currentUser = await UserModel.loadFromPrefs();
+          //     //   if (currentUser == null) return;
+          //     //   uid = currentUser.uid;
+          //     // } catch (e) {
+          //     //   print('Failed to subscribe to topic: $e');
+          //     // }
 
-          //  await sendNotificationTopic(
-          //               'meeting-5acff35a-bbd4-472b-999e-2e8e538d7a2c', "kata-kata hari ini", "dsasd", "site11");
-
-          //         },
-          //         child: Text("asdas"),
-          //       ),
+          //   },
+          //   child: Text("asdas"),
+          // ),
 
           // SizedBox(
           //   height: 130,

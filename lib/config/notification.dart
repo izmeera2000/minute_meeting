@@ -102,3 +102,24 @@ Future<void> unsubscribeFromAllTopics() async {
   // Optionally clear the list
   await prefs.remove('subscribed_topics');
 }
+
+
+
+Future<void> sendTelegramGroupMessage(String botToken, String groupChatId, String message 
+  ) async {
+    final url = 'https://api.telegram.org/bot$botToken/sendMessage';
+
+    final response = await http.post(
+      Uri.parse(url),
+      body: {
+        'chat_id': groupChatId,
+        'text': message,
+      },
+    );
+
+    if (response.statusCode == 200) {
+      print("Message sent to group successfully");
+    } else {
+      print("Failed to send message: ${response.body}");
+    }
+  }
