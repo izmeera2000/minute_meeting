@@ -172,7 +172,8 @@ class _ManageUsersState extends State<ManageUsers> {
         String botToken =
             '7833413502:AAFDP4OLzJIZuJU_Rm2a5ueaNtTSXHsf-I0'; // Replace with your Bot Token
         String groupChatId = '-4798645160'; // Replace with your Chat ID
-        String message = "You've been invited to ${seedName} ";
+        String message = "${email} have been invited to ${seedName} ";
+        
         await sendTelegramGroupMessage(botToken, groupChatId, message);
       } else {
         print("No FCM token for user with email $email");

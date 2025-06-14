@@ -249,7 +249,7 @@ class _CreateMeetingPageState extends State<CreateMeetingPage> {
                     String botToken =
                   '7833413502:AAFDP4OLzJIZuJU_Rm2a5ueaNtTSXHsf-I0'; // Replace with your Bot Token
               String groupChatId = '-4798645160'; // Replace with your Chat ID
-              String message = "You've been invited to New meeting: ${meeting.title}" ;
+              String message = "${participant.email} been invited to new meeting: ${meeting.title}" ;
               await sendTelegramGroupMessage(botToken, groupChatId, message);
         } else {
           print("No FCM token for ${participant.name}");

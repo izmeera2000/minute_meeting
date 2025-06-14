@@ -156,7 +156,7 @@ class _MeetingNotesKanbanPageState extends State<MeetingNotesKanbanPage> {
           'startTime': startTime,
           'endTime': endTime,
           'createdBy': createdByList, // Store the list of creators
-          'status': meetingDetails['status'],
+          'group': meetingDetails['group'],
           'timestamp': FieldValue
               .serverTimestamp(), // Automatically set the timestamp when the note is created
         };
@@ -392,12 +392,12 @@ Future<void> exportNotesToFirestore({
               author: author, // Use the Author object here
               group: data['group'],
             );
-            final status = data['group'];
-            if (status == 'ideas') {
+            final group = data['group'];
+            if (group == 'ideas') {
               ideas.add(note);
-            } else if (status == 'discussed') {
+            } else if (group == 'discussed') {
               discussed.add(note);
-            } else if (status == 'action_items') {
+            } else if (group == 'action_items') {
               actionItems.add(note);
             }
           }
@@ -423,7 +423,7 @@ Future<void> exportNotesToFirestore({
                   .doc(widget.meetingId)
                   .collection('notes')
                   .doc(movedNote.id)
-                  .update({'status': groups[newListIndex!].id});
+                  .update({'group': groups[newListIndex!].id});
             },
             groupConstraints: BoxConstraints(maxWidth: 250),
             groupHeaderBuilder: (context, groupId) {
