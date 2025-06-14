@@ -105,7 +105,7 @@ class _MyAppState extends State<MyApp> {
 
   void initNotifications() async {
     // Android init
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidInit = AndroidInitializationSettings('@mipmap/launcher_icon');
 
     // Optional: handle tap when notification is clicked
     const initSettings = InitializationSettings(android: androidInit);
