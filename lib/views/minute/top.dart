@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:minute_meeting/models/user.dart';
-import 'package:minute_meeting/views/meeting/notes.dart';
-import 'package:minute_meeting/views/meeting/notes2.dart';
+import 'package:minute_meeting/views/meeting/notes_meeting.dart';
+import 'package:minute_meeting/views/meeting/notes_personal.dart';
 
 class TwoTabsPage extends StatelessWidget {
   const TwoTabsPage({super.key});
