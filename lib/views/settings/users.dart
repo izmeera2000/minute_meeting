@@ -23,7 +23,7 @@ class _ManageUsersState extends State<ManageUsers> {
   bool _isLoading = true;
   String? currentUserRole;
   final _emailController = TextEditingController();
-String? seedName;
+  String? seedName;
   @override
   void initState() {
     super.initState();
@@ -79,9 +79,8 @@ String? seedName;
       final doc = await _firestore.collection('seeds').doc(seedId).get();
       final users = List<Map<String, dynamic>>.from(doc['users'] ?? []);
 
-
-           seedName = doc['name'] ?? 'Unknown Seed'; // Default to 'Unknown Seed' if not found
-
+      seedName = doc['name'] ??
+          'Unknown Seed'; // Default to 'Unknown Seed' if not found
 
       // Filter out the current user from the users list
       final filteredUsers = users.where((user) {
@@ -170,11 +169,11 @@ String? seedName;
           route: '/managegroup',
         );
 
-                    String botToken =
-                  '7833413502:AAFDP4OLzJIZuJU_Rm2a5ueaNtTSXHsf-I0'; // Replace with your Bot Token
-              String groupChatId = '-4798645160'; // Replace with your Chat ID
-              String message = "You've been invited to ${seedName} " ;
-              await sendTelegramGroupMessage(botToken, groupChatId, message);
+        String botToken =
+            '7833413502:AAFDP4OLzJIZuJU_Rm2a5ueaNtTSXHsf-I0'; // Replace with your Bot Token
+        String groupChatId = '-4798645160'; // Replace with your Chat ID
+        String message = "You've been invited to ${seedName} ";
+        await sendTelegramGroupMessage(botToken, groupChatId, message);
       } else {
         print("No FCM token for user with email $email");
       }

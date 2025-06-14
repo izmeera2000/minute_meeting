@@ -61,6 +61,7 @@ dependencies:
   appflowy_board: ^0.1.2
   sidebarx: ^0.17.1
   rename_app: ^1.6.3
+  flutter_launcher_icons: ^0.14.4
 
 dev_dependencies:
   flutter_test:
@@ -86,7 +87,7 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
-     - assets/
+    - assets/images/
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see
@@ -114,3 +115,9 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/custom-fonts/#from-packages
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: false
+  image_path: "assets/images/logo.png"
+  min_sdk_android: 21 # android min sdk min:16, default 21
+ 
