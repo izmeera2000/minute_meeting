@@ -14,6 +14,9 @@ import 'package:minute_meeting/views/meeting/components/create_cmp.dart';
 import 'package:minute_meeting/views/meeting/pdf.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 
 class MeetingDetailsScreen extends StatefulWidget {
   final Meeting meeting;
@@ -137,79 +140,79 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
     }
   }
 
-  Future<void> _pickAndUploadAttachment(Meeting meeting) async {
-    if (_currentUser == null) return;
+Future<void> _pickAndUploadAttachment(Meeting meeting) async {
+  if (_currentUser == null) return;
 
-    try {
-      // 1. Pick file
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['pdf', 'doc', 'jpg', 'png'],
-        allowMultiple: false,
+  try {
+    // 1. Pick file
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'doc', 'jpg', 'png'],
+      allowMultiple: false,
+    );
+
+    if (result == null) return;
+
+    final pickedFile = result.files.single;
+    if (pickedFile.path == null) throw Exception('Picked file path is null.');
+
+    File file = File(pickedFile.path!);
+    final extension = path.extension(file.path).toLowerCase();
+
+    // 2. Compress image if it's jpg or png
+    if (extension == '.jpg' || extension == '.jpeg' || extension == '.png') {
+      final compressed = await compressImage(file);
+      if (compressed != null) file = compressed;
+    }
+
+    // 3. Upload to Firebase Storage
+    final storageRef = FirebaseStorage.instance.ref().child(
+      'attachments/${meeting.id}/${DateTime.now().millisecondsSinceEpoch}_${pickedFile.name}'
+    );
+
+    final uploadTask = storageRef.putFile(file);
+
+    uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
+      print('Task state: ${snapshot.state}, bytes transferred: ${snapshot.bytesTransferred}/${snapshot.totalBytes}');
+    }, onError: (e) {
+      print('Upload error during snapshot: $e');
+    });
+
+    final snapshot = await uploadTask;
+    final downloadUrl = await snapshot.ref.getDownloadURL();
+
+    // 4. Add to Firestore
+    final newAttachment = Attachment(
+      url: downloadUrl,
+      uploadedBy: _currentUser!.email,
+        filename: pickedFile.name.split('_').last,
+      status: isHost(meeting) ? 'approved' : 'pending',
+    );
+
+    final updatedAttachments = [...meeting.attachments, newAttachment]
+        .map((a) => a.toMap())
+        .toList();
+
+    await FirebaseFirestore.instance
+        .collection('meetings')
+        .doc(meeting.id!)
+        .update({'attachments': updatedAttachments});
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Attachment uploaded: ${newAttachment.status}')),
       );
-
-      if (result == null) return;
-
-      final pickedFile = result.files.single;
-      print("Picked: ${pickedFile.name}");
-      print("File path: ${pickedFile.path}");
-
-      if (pickedFile.path == null) {
-        throw Exception('Picked file path is null.');
-      }
-
-      final file = File(pickedFile.path!);
-
-      final storageRef = FirebaseStorage.instance.ref().child(
-          'attachments/${meeting.id}/${DateTime.now().millisecondsSinceEpoch}_${pickedFile.name}');
-
-      // 🔥 Use putFile now that we have permission
-      final uploadTask = storageRef.putFile(file);
-
-      uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-        print(
-            'Task state: ${snapshot.state}, bytes transferred: ${snapshot.bytesTransferred}/${snapshot.totalBytes}');
-      }, onError: (e) {
-        print('Upload error during snapshot: $e');
-      });
-      final snapshot = await uploadTask;
-
-      final downloadUrl = await snapshot.ref.getDownloadURL();
-      print("Uploaded file URL: $downloadUrl");
-
-      final newAttachment = Attachment(
-        url: downloadUrl,
-        uploadedBy: _currentUser!.email,
-        filename: Uri.decodeFull(downloadUrl.split('/').last.split('?').first),
-        status: isHost(meeting) ? 'approved' : 'pending',
+    }
+  } catch (e) {
+    print('Upload error: $e');
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Upload failed: $e')),
       );
-
-      final docId = meeting.id!;
-      final updatedAttachments = [...meeting.attachments, newAttachment]
-          .map((a) => a.toMap())
-          .toList();
-
-      await FirebaseFirestore.instance
-          .collection('meetings')
-          .doc(docId)
-          .update({'attachments': updatedAttachments});
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Attachment uploaded: ${newAttachment.status}'),
-          ),
-        );
-      }
-    } catch (e) {
-      print('Upload error: $e');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed: $e')),
-        );
-      }
     }
   }
+}
+
 
   Future<void> _toggleMeetingStatus(String newStatus) async {
     try {
@@ -604,7 +607,7 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                           contentPadding: EdgeInsets.zero,
                           leading: const Icon(Icons.insert_drive_file),
                           title: Text(
-                            getFileName(a.url),
+                            getFileName(a.filename),
                             style: const TextStyle(
                                 decoration: TextDecoration.underline,
                                 color: Colors.blue),
@@ -614,7 +617,7 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
                             showDialog(
                               context: context,
                               builder: (_) => AlertDialog(
-                                title: Text(getFileName(a.url)),
+                                title: Text(a.filename),
                                 content: SizedBox(
                                   width: double.maxFinite,
                                   child: a.url.toLowerCase().endsWith('.pdf')
@@ -814,5 +817,26 @@ if (isHostc) {
         },
       ),
     );
+  }
+}
+Future<File?> compressImage(File file) async {
+  try {
+    final tempDir = await getTemporaryDirectory();
+    final targetPath = path.join(
+      tempDir.path,
+      "${DateTime.now().millisecondsSinceEpoch}_${path.basename(file.path)}",
+    );
+
+    // compressAndGetFile returns an XFile? – convert it to File
+    final result = await FlutterImageCompress.compressAndGetFile(
+      file.absolute.path,
+      targetPath,
+      quality: 80,
+    );
+
+    return result?.path != null ? File(result!.path) : null;
+  } catch (e) {
+    debugPrint("Error compressing image: $e");
+    return null;
   }
 }

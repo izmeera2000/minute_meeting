@@ -16,12 +16,15 @@ class _MeetingListPageState extends State<MeetingListPage> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   List<Meeting> _meetings = [];
+  late DateTime _selectedDate;
 
   @override
   void initState() {
     super.initState();
     _selectedDay = _focusedDay;
     _fetchMeetingsForDay(_selectedDay!);
+   _selectedDate = DateTime.now();
+
   }
 
   Future<void> _fetchMeetingsForDay(DateTime date) async {
@@ -109,7 +112,12 @@ class _MeetingListPageState extends State<MeetingListPage> {
             icon: const Icon(Icons.add),
             tooltip: 'Add',
             onPressed: () {
-              Navigator.pushNamed(context, '/meeting/create');
+              // Pass _selectedDate to the new screen using Navigator.pushNamed
+              Navigator.pushNamed(
+                context,
+                '/meeting/create',
+                arguments: _selectedDate, // Pass the selected date as argument
+              );
             },
           ),
         ],
@@ -129,6 +137,7 @@ class _MeetingListPageState extends State<MeetingListPage> {
               setState(() {
                 _selectedDay = selectedDay;
                 _focusedDay = focusedDay;
+                _selectedDate = selectedDay;
               });
               _fetchMeetingsForDay(selectedDay);
             },

@@ -24,11 +24,15 @@ String getFileName(String url) {
   try {
     final segments = Uri.parse(url).pathSegments;
     final lastSegment = segments.isNotEmpty ? segments.last : 'unknown_file';
-    return Uri.decodeFull(lastSegment.split('?').first);
+    
+    // Split the filename by underscores and get the last part
+    final nameParts = lastSegment.split('_');
+    return nameParts.isNotEmpty ? nameParts.last : 'unknown_file';
   } catch (e) {
     return 'unknown_file';
   }
 }
+
 
 void launchURL(BuildContext context, String url) async {
   final fileName = getFileName(url);

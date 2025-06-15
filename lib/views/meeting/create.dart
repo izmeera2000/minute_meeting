@@ -19,6 +19,8 @@ class CreateMeetingPage extends StatefulWidget {
 }
 
 class _CreateMeetingPageState extends State<CreateMeetingPage> {
+    late DateTime _selectedDate;
+
   final _titleController = TextEditingController();
   final _participantsController = TextEditingController();
   final _locationController = TextEditingController(); // For location input
@@ -35,8 +37,7 @@ class _CreateMeetingPageState extends State<CreateMeetingPage> {
   List<Map<String, dynamic>> _selectedParticipants = [];
   Map<String, String> _participantRoles = {}; // Maps emails to their roles
 
-  DateTime _selectedDate = DateTime.now();
-  TimeOfDay _startTime = TimeOfDay(hour: 9, minute: 0); // Default start time
+   TimeOfDay _startTime = TimeOfDay(hour: 9, minute: 0); // Default start time
   TimeOfDay _endTime = TimeOfDay(hour: 10, minute: 0); // Default end time
 
   // Convert TimeOfDay to DateTime
@@ -44,6 +45,21 @@ class _CreateMeetingPageState extends State<CreateMeetingPage> {
     return DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day,
         time.hour, time.minute);
   }
+
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // Retrieve the selected date passed from the previous screen
+    final arguments = ModalRoute.of(context)?.settings.arguments;
+    if (arguments != null && arguments is DateTime) {
+      _selectedDate = arguments;
+    } else {
+      _selectedDate = DateTime.now(); // Default to current date if no date is passed
+    }
+  }
+
 
   Future<void> _fetchUsersAndSeeds() async {
     try {
@@ -517,7 +533,7 @@ class _CreateMeetingPageState extends State<CreateMeetingPage> {
                 hintText: 'Select Room',
                 items: _rooms.map((room) {
                   return DropdownMenuItem<String>(
-                    value: room.roomId, // Use unique ID
+                    value: room.name, // Use unique ID
                     child: Text(room.name), // Display room name
                   );
                 }).toList(),
