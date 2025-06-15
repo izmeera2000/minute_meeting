@@ -10,7 +10,7 @@ import 'package:minute_meeting/models/user.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:minute_meeting/views/meeting/components/create_cmp.dart';
- import 'package:minute_meeting/views/meeting/notes_meeting.dart';
+import 'package:minute_meeting/views/meeting/notes_meeting.dart';
 import 'package:minute_meeting/views/meeting/pdf.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -140,79 +140,79 @@ class _MeetingDetailsScreenState extends State<MeetingDetailsScreen> {
     }
   }
 
-Future<void> _pickAndUploadAttachment(Meeting meeting) async {
-  if (_currentUser == null) return;
+  Future<void> _pickAndUploadAttachment(Meeting meeting) async {
+    if (_currentUser == null) return;
 
-  try {
-    // 1. Pick file
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf', 'doc', 'jpg', 'png'],
-      allowMultiple: false,
-    );
+    try {
+      // 1. Pick file
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'doc', 'jpg', 'png'],
+        allowMultiple: false,
+      );
 
-    if (result == null) return;
+      if (result == null) return;
 
-    final pickedFile = result.files.single;
-    if (pickedFile.path == null) throw Exception('Picked file path is null.');
+      final pickedFile = result.files.single;
+      if (pickedFile.path == null) throw Exception('Picked file path is null.');
 
-    File file = File(pickedFile.path!);
-    final extension = path.extension(file.path).toLowerCase();
+      File file = File(pickedFile.path!);
+      final extension = path.extension(file.path).toLowerCase();
 
-    // 2. Compress image if it's jpg or png
-    if (extension == '.jpg' || extension == '.jpeg' || extension == '.png') {
-      final compressed = await compressImage(file);
-      if (compressed != null) file = compressed;
-    }
+      // 2. Compress image if it's jpg or png
+      if (extension == '.jpg' || extension == '.jpeg' || extension == '.png') {
+        final compressed = await compressImage(file);
+        if (compressed != null) file = compressed;
+      }
 
-    // 3. Upload to Firebase Storage
-    final storageRef = FirebaseStorage.instance.ref().child(
-      'attachments/${meeting.id}/${DateTime.now().millisecondsSinceEpoch}_${pickedFile.name}'
-    );
+      // 3. Upload to Firebase Storage
+      final storageRef = FirebaseStorage.instance.ref().child(
+          'attachments/${meeting.id}/${DateTime.now().millisecondsSinceEpoch}_${pickedFile.name}');
 
-    final uploadTask = storageRef.putFile(file);
+      final uploadTask = storageRef.putFile(file);
 
-    uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-      print('Task state: ${snapshot.state}, bytes transferred: ${snapshot.bytesTransferred}/${snapshot.totalBytes}');
-    }, onError: (e) {
-      print('Upload error during snapshot: $e');
-    });
+      uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
+        print(
+            'Task state: ${snapshot.state}, bytes transferred: ${snapshot.bytesTransferred}/${snapshot.totalBytes}');
+      }, onError: (e) {
+        print('Upload error during snapshot: $e');
+      });
 
-    final snapshot = await uploadTask;
-    final downloadUrl = await snapshot.ref.getDownloadURL();
+      final snapshot = await uploadTask;
+      final downloadUrl = await snapshot.ref.getDownloadURL();
 
-    // 4. Add to Firestore
-    final newAttachment = Attachment(
-      url: downloadUrl,
-      uploadedBy: _currentUser!.email,
+      // 4. Add to Firestore
+      final newAttachment = Attachment(
+        url: downloadUrl,
+        uploadedBy: _currentUser!.email,
         filename: pickedFile.name.split('_').last,
-      status: isHost(meeting) ? 'approved' : 'pending',
-    );
-
-    final updatedAttachments = [...meeting.attachments, newAttachment]
-        .map((a) => a.toMap())
-        .toList();
-
-    await FirebaseFirestore.instance
-        .collection('meetings')
-        .doc(meeting.id!)
-        .update({'attachments': updatedAttachments});
-
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Attachment uploaded: ${newAttachment.status}')),
+        status: isHost(meeting) ? 'approved' : 'pending',
       );
-    }
-  } catch (e) {
-    print('Upload error: $e');
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Upload failed: $e')),
-      );
+
+      final updatedAttachments = [...meeting.attachments, newAttachment]
+          .map((a) => a.toMap())
+          .toList();
+
+      await FirebaseFirestore.instance
+          .collection('meetings')
+          .doc(meeting.id!)
+          .update({'attachments': updatedAttachments});
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Attachment uploaded: ${newAttachment.status}')),
+        );
+      }
+    } catch (e) {
+      print('Upload error: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload failed: $e')),
+        );
+      }
     }
   }
-}
-
 
   Future<void> _toggleMeetingStatus(String newStatus) async {
     try {
@@ -612,7 +612,14 @@ Future<void> _pickAndUploadAttachment(Meeting meeting) async {
                                 decoration: TextDecoration.underline,
                                 color: Colors.blue),
                           ),
-                          subtitle: Text('Status: ${a.status}'),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Status: ${a.status}'),
+                              Text(
+                                  'Uploaded By : ${a.uploadedBy}'), // Add another subtitle
+                            ],
+                          ),
                           onTap: () {
                             showDialog(
                               context: context,
@@ -742,75 +749,77 @@ Future<void> _pickAndUploadAttachment(Meeting meeting) async {
 
           // Show "Start" or "Stop" button for the host
           // Show "Start" or "Stop" button for the host
-if (isHostc) {
-  // Get today's date for comparison
-  final today = DateTime.now();
-  final meetingDate = widget.meeting.date;
-  
-  // Only show FloatingActionButton if the meeting is today and the status is not 'ended'
-  if (meetingDate.year == today.year &&
-      meetingDate.month == today.month &&
-      meetingDate.day == today.day &&
-      meeting.status != 'ended') {
-    
-    return FloatingActionButton.extended(
-      icon: Icon(
-        meeting.status == null || meeting.status == 'not_started'
-            ? Icons.play_arrow // Show play button if not started
-            : Icons.stop, // Show stop button if started
-      ),
-      label: Text(
-        meeting.status == null || meeting.status == 'not_started'
-            ? "Start Meeting"
-            : "End Meeting", // Change label depending on status
-      ),
-      onPressed: () async {
-        final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: Text(meeting.status == null || meeting.status == 'not_started'
-                ? "Start the meeting"
-                : "End the meeting"),
-            content: Text(meeting.status == null || meeting.status == 'not_started'
-                ? "Do you want to start the meeting?"
-                : "Do you want to end the meeting?"),
-            actions: [
-              TextButton(
-                child: const Text("Cancel"),
-                onPressed: () => Navigator.pop(context, false),
-              ),
-              ElevatedButton(
-                child: Text(
+          if (isHostc) {
+            // Get today's date for comparison
+            final today = DateTime.now();
+            final meetingDate = widget.meeting.date;
+
+            // Only show FloatingActionButton if the meeting is today and the status is not 'ended'
+            if (meetingDate.year == today.year &&
+                meetingDate.month == today.month &&
+                meetingDate.day == today.day &&
+                meeting.status != 'ended') {
+              return FloatingActionButton.extended(
+                icon: Icon(
                   meeting.status == null || meeting.status == 'not_started'
-                      ? "Start"
-                      : "End",
+                      ? Icons.play_arrow // Show play button if not started
+                      : Icons.stop, // Show stop button if started
                 ),
-                onPressed: () => Navigator.pop(context, true),
-              ),
-            ],
-          ),
-        );
+                label: Text(
+                  meeting.status == null || meeting.status == 'not_started'
+                      ? "Start Meeting"
+                      : "End Meeting", // Change label depending on status
+                ),
+                onPressed: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      title: Text(meeting.status == null ||
+                              meeting.status == 'not_started'
+                          ? "Start the meeting"
+                          : "End the meeting"),
+                      content: Text(meeting.status == null ||
+                              meeting.status == 'not_started'
+                          ? "Do you want to start the meeting?"
+                          : "Do you want to end the meeting?"),
+                      actions: [
+                        TextButton(
+                          child: const Text("Cancel"),
+                          onPressed: () => Navigator.pop(context, false),
+                        ),
+                        ElevatedButton(
+                          child: Text(
+                            meeting.status == null ||
+                                    meeting.status == 'not_started'
+                                ? "Start"
+                                : "End",
+                          ),
+                          onPressed: () => Navigator.pop(context, true),
+                        ),
+                      ],
+                    ),
+                  );
 
-        if (confirmed == true) {
-          // If the meeting is not started, set it to 'started'
-          if (meeting.status == null || meeting.status == 'not_started') {
-            // Change the meeting status to 'started'
-            await _toggleMeetingStatus('started');
-          } else {
-            // End the meeting if it's started
-            await _toggleMeetingStatus('ended');
+                  if (confirmed == true) {
+                    // If the meeting is not started, set it to 'started'
+                    if (meeting.status == null ||
+                        meeting.status == 'not_started') {
+                      // Change the meeting status to 'started'
+                      await _toggleMeetingStatus('started');
+                    } else {
+                      // End the meeting if it's started
+                      await _toggleMeetingStatus('ended');
+                    }
+
+                    setState(() {}); // Refresh the UI after the action
+                  }
+                },
+              );
+            }
+
+            // If the meeting status is 'ended', or the meeting isn't today, no FloatingActionButton
+            return SizedBox.shrink(); // Empty widget, no button
           }
-
-          setState(() {}); // Refresh the UI after the action
-        }
-      },
-    );
-  }
-  
-  // If the meeting status is 'ended', or the meeting isn't today, no FloatingActionButton
-  return SizedBox.shrink(); // Empty widget, no button
-}
-
 
           // If the user is not the host and the status is not pending, don't show anything
           return const SizedBox.shrink();
@@ -819,6 +828,7 @@ if (isHostc) {
     );
   }
 }
+
 Future<File?> compressImage(File file) async {
   try {
     final tempDir = await getTemporaryDirectory();
