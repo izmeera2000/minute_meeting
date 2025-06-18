@@ -28,8 +28,8 @@ class _HomePageState extends State<HomePage> {
       'icon': Icons.note_alt,
       'route': '/minutemeeting'
     },
-    {'title': 'Manage Group', 'icon': Icons.group, 'route': '/managegroup'},
-    {'title': 'Settings', 'icon': Icons.settings, 'route': '/settings'},
+    {'title': 'Reservation', 'icon': Icons.group, 'route': '/managegroup'},
+    {'title': 'Profile', 'icon': Icons.settings, 'route': '/settings'},
   ];
 
   List<Map<String, String>> userMeetings = [];
